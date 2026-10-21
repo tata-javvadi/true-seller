@@ -17,9 +17,26 @@ export interface FraudReport {
   fraud_type: FraudType;
   report_count: number;
   screenshot_urls: string[] | null;
+  status: 'pending' | 'approved' | 'rejected';
+  reviewed_at: string | null;
+  reviewed_by: string | null;
   created_at: string;
   updated_at: string;
 }
+
+export type ReportStatus = 'pending' | 'approved' | 'rejected';
+
+export const STATUS_LABELS: Record<ReportStatus, string> = {
+  pending: 'Pending Review',
+  approved: 'Approved',
+  rejected: 'Rejected',
+};
+
+export const STATUS_COLORS: Record<ReportStatus, string> = {
+  pending: 'bg-amber-100 text-amber-700 border-amber-200',
+  approved: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  rejected: 'bg-red-100 text-red-700 border-red-200',
+};
 
 export const FRAUD_TYPE_LABELS: Record<FraudType, string> = {
   fake_product: 'Fake Product',

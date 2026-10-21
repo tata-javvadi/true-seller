@@ -1,49 +1,88 @@
-import { ShieldCheck, ShieldAlert } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ShieldCheck, ShieldAlert, Settings } from 'lucide-react';
 import { SearchForm } from '@/components/SearchForm';
 import { ReportForm } from '@/components/ReportForm';
+import { AdminPanel } from '@/components/AdminPanel';
+
+type Route = 'home' | 'admin';
+
+function useHashRoute(): [Route, (r: Route) => void] {
+  const [route, setRoute] = useState<Route>(() =>
+    window.location.hash === '#/admin' ? 'admin' : 'home'
+  );
+
+  useEffect(() => {
+    const onHashChange = () => {
+      setRoute(window.location.hash === '#/admin' ? 'admin' : 'home');
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
+  const navigate = (r: Route) => {
+    window.location.hash = r === 'admin' ? '#/admin' : '';
+  };
+
+  return [route, navigate];
+}
 
 function App() {
+  const [route, navigate] = useHashRoute();
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-slate-200">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
+          <button onClick={() => navigate('home')} className="flex items-center gap-2.5">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-600/20">
               <ShieldCheck className="w-6 h-6 text-white" />
             </div>
-            <div>
+            <div className="text-left">
               <h1 className="font-bold text-slate-800 leading-none">TrueSellerCheck</h1>
               <p className="text-xs text-slate-500 mt-0.5">Check Before You Pay</p>
             </div>
-          </div>
+          </button>
+          <button
+            onClick={() => navigate(route === 'admin' ? 'home' : 'admin')}
+            className="flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors"
+          >
+            <Settings className="w-4 h-4" />
+            {route === 'admin' ? 'Back to Home' : 'Admin'}
+          </button>
         </div>
       </header>
 
-      {/* Main */}
-      <main className="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-6 py-12 flex flex-col justify-center">
-        {/* Hero */}
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center gap-2 bg-emerald-100 text-emerald-700 px-4 py-1.5 rounded-full text-sm font-medium mb-6">
-            <ShieldAlert className="w-4 h-4" />
-            Protect yourself from payment fraud
+      {route === 'admin' ? (
+        <main className="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-6 py-10">
+          <h2 className="text-2xl font-bold text-slate-800 mb-6">Admin Panel</h2>
+          <AdminPanel />
+        </main>
+      ) : (
+        <main className="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-6 py-12 flex flex-col justify-center">
+          {/* Hero */}
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center gap-2 bg-emerald-100 text-emerald-700 px-4 py-1.5 rounded-full text-sm font-medium mb-6">
+              <ShieldAlert className="w-4 h-4" />
+              Protect yourself from payment fraud
+            </div>
+            <h2 className="text-3xl sm:text-5xl font-bold text-slate-800 leading-tight mb-4">
+              Is that seller safe to pay?
+            </h2>
+            <p className="text-lg text-slate-600 max-w-xl mx-auto">
+              Enter a phone number or UPI ID to check it against our community fraud database before you make a payment.
+            </p>
           </div>
-          <h2 className="text-3xl sm:text-5xl font-bold text-slate-800 leading-tight mb-4">
-            Is that seller safe to pay?
-          </h2>
-          <p className="text-lg text-slate-600 max-w-xl mx-auto">
-            Enter a phone number or UPI ID to check it against our community fraud database before you make a payment.
-          </p>
-        </div>
 
-        {/* Search */}
-        <div className="mb-10">
-          <SearchForm />
-        </div>
+          {/* Search */}
+          <div className="mb-10">
+            <SearchForm />
+          </div>
 
-        {/* Report */}
-        <ReportForm />
-      </main>
+          {/* Report */}
+          <ReportForm />
+        </main>
+      )}
 
       {/* Footer */}
       <footer className="bg-slate-900 py-8">

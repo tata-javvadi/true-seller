@@ -44,7 +44,7 @@ function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
-      <header className="sticky top-0 z-50 bg-white border-b border-slate-200">
+      {route === 'admin' && <header className="sticky top-0 z-50 bg-white border-b border-slate-200">
         <div className="max-w-xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <button onClick={() => navigate('home')} className="flex items-center gap-2.5 min-w-0">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-md shadow-emerald-700/20 flex-shrink-0">
@@ -69,7 +69,7 @@ function App() {
             </button>
           )}
         </div>
-      </header>
+      </header>}
 
       {route === 'admin' ? (
         <main className="flex-1 w-full max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
@@ -79,7 +79,7 @@ function App() {
         <main className="flex-1 tsc">
           <section className="tsc-hero">
             <svg className="tsc-hero-bg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6l7-3z" /></svg>
-            <p className="tsc-eyebrow">BUY WITH CONFIDENCE</p>
+            <p className="tsc-eyebrow">INDIA'S SCAM DATABASE</p>
             <h2 className="tsc-title">True Seller<br /><span className="tsc-title-accent">Check <ShieldCheck aria-hidden="true" /></span></h2>
             <p className="tsc-sub">Check a phone number or UPI ID against reports from other buyers.</p>
           </section>

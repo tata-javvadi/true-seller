@@ -1,20 +1,65 @@
-import { useState, useCallback } from 'react';
-import { Search } from 'lucide-react';
+import { useState, useCallback, useRef } from 'react';
+import jsQR from 'jsqr';
+import { Search, QrCode, ImageUp } from 'lucide-react';
 import { supabase, validateIdentifier, detectType, type FraudReport } from '@/lib/supabase';
 import { ResultCard } from './ResultCard';
 
 type SearchState = 'idle' | 'searching' | 'found' | 'safe' | 'error';
+type SearchMode = 'phone' | 'upi' | 'qr';
+
+function extractUpiId(payload: string): string | null {
+  const decoded = (() => {
+    try { return decodeURIComponent(payload); } catch { return payload; }
+  })();
+  const params = decoded.includes('?') ? new URLSearchParams(decoded.slice(decoded.indexOf('?') + 1)) : null;
+  const address = params?.get('pa') ?? params?.get('vpa');
+  if (address && /^[\w.-]{2,256}@[\w.-]{2,64}$/.test(address.trim())) return address.trim();
+  return decoded.match(/[\w.-]{2,256}@[\w.-]{2,64}/)?.[0] ?? null;
+}
+
+async function decodeQrImage(file: File): Promise<string | null> {
+  let bitmap: ImageBitmap | null = null;
+  let image: HTMLImageElement | null = null;
+  let objectUrl: string | null = null;
+  try {
+    if (typeof createImageBitmap === 'function') {
+      bitmap = await createImageBitmap(file);
+    } else {
+      objectUrl = URL.createObjectURL(file);
+      image = new Image();
+      image.src = objectUrl;
+      await image.decode();
+    }
+    const source = bitmap ?? image;
+    if (!source) return null;
+    const scale = Math.min(1, 1800 / Math.max(source.width, source.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(source.width * scale);
+    canvas.height = Math.round(source.height * scale);
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    if (!context) return null;
+    context.drawImage(source, 0, 0, canvas.width, canvas.height);
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+    return jsQR(pixels.data, pixels.width, pixels.height, { inversionAttempts: 'attemptBoth' })?.data ?? null;
+  } finally {
+    bitmap?.close();
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+  }
+}
 
 export function SearchForm() {
-  const [mode, setMode] = useState<'phone' | 'upi'>('phone');
+  const [mode, setMode] = useState<SearchMode>('phone');
   const [query, setQuery] = useState('');
   const [validationError, setValidationError] = useState('');
   const [state, setState] = useState<SearchState>('idle');
   const [result, setResult] = useState<FraudReport | null>(null);
   const [searchedIdentifier, setSearchedIdentifier] = useState('');
+  const [qrError, setQrError] = useState('');
+  const [decodingQr, setDecodingQr] = useState(false);
+  const qrInputRef = useRef<HTMLInputElement>(null);
 
-  const handleSearch = useCallback(async () => {
-    const checked = validateIdentifier(query, mode);
+  const runSearch = useCallback(async (value: string, identifierMode: 'phone' | 'upi') => {
+    const checked = validateIdentifier(value, identifierMode);
     if (!checked.ok) {
       setValidationError(checked.error);
       setState('idle');
@@ -48,18 +93,48 @@ export function SearchForm() {
     } catch {
       setState('error');
     }
-  }, [query, mode]);
+  }, []);
+
+  const handleSearch = useCallback(() => runSearch(query, mode === 'phone' ? 'phone' : 'upi'), [query, mode, runSearch]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     handleSearch();
   };
 
-  const switchMode = (next: 'phone' | 'upi') => {
+  const switchMode = (next: SearchMode) => {
     setMode(next);
     setValidationError('');
+    setQrError('');
     setState('idle');
     setResult(null);
+  };
+
+  const handleQrFile = async (file?: File) => {
+    if (!file) return;
+    setQrError('');
+    setValidationError('');
+    setDecodingQr(true);
+    try {
+      const payload = await decodeQrImage(file);
+      if (!payload) {
+        setQrError('Could not read a QR code from this image. Try a clear, well-lit image.');
+        return;
+      }
+      const upiId = extractUpiId(payload);
+      if (!upiId) {
+        setQrError('This QR code does not appear to contain a UPI ID.');
+        return;
+      }
+      setQuery(upiId);
+      setMode('upi');
+      await runSearch(upiId, 'upi');
+    } catch {
+      setQrError('Could not open this image. Please choose a JPG or PNG QR image.');
+    } finally {
+      setDecodingQr(false);
+      if (qrInputRef.current) qrInputRef.current.value = '';
+    }
   };
 
   return (
@@ -68,7 +143,21 @@ export function SearchForm() {
         <div className="tsc-toggle" role="group" aria-label="Search by">
           <button type="button" className={mode === 'phone' ? 'on' : ''} aria-pressed={mode === 'phone'} onClick={() => switchMode('phone')}>Phone</button>
           <button type="button" className={mode === 'upi' ? 'on' : ''} aria-pressed={mode === 'upi'} onClick={() => switchMode('upi')}>UPI ID</button>
+          <button type="button" className={mode === 'qr' ? 'on' : ''} aria-pressed={mode === 'qr'} onClick={() => switchMode('qr')}>QR</button>
         </div>
+        {mode === 'qr' ? (
+          <>
+            <label className="tsc-label" htmlFor="seller-qr">Upload seller’s UPI QR code</label>
+            <input ref={qrInputRef} id="seller-qr" type="file" accept="image/*" capture="environment" className="sr-only" onChange={(event) => void handleQrFile(event.target.files?.[0])} />
+            <button type="button" className="tsc-qr-upload" onClick={() => qrInputRef.current?.click()} disabled={decodingQr}>
+              <ImageUp aria-hidden="true" />
+              <span>{decodingQr ? 'Reading QR code…' : 'Take a photo or choose an image'}</span>
+            </button>
+            <p className="tsc-qr-hint">We’ll extract the UPI ID and check it against fraud reports.</p>
+            {qrError && <p className="tsc-field-error" role="alert">{qrError}</p>}
+          </>
+        ) : (
+        <>
         <label htmlFor="seller-query" className="tsc-label">{mode === 'phone' ? 'Seller phone number' : 'Seller UPI ID'}</label>
         <div className={`tsc-input ${validationError ? 'tsc-input-error' : ''}`}>
           <Search aria-hidden="true" />
@@ -92,7 +181,9 @@ export function SearchForm() {
             {validationError}
           </p>
         )}
-        <button
+        </>
+        )}
+        {mode !== 'qr' && <button
           type="submit"
           disabled={state === 'searching' || !query.trim()}
           className="tsc-cta"
@@ -105,7 +196,7 @@ export function SearchForm() {
           ) : (
             'Check Now'
           )}
-        </button>
+        </button>}
       </form>
 
       <div className="tsc-result">

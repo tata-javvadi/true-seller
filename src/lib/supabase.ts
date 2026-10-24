@@ -54,10 +54,12 @@ export const FRAUD_TYPE_COLORS: Record<FraudType, string> = {
   other: 'bg-gray-100 text-gray-700 border-gray-200',
 };
 
-export function normalizeIdentifier(input: string): string {
-  return input.trim().toLowerCase().replace(/\s+/g, '');
-}
-
-export function detectType(identifier: string): 'phone' | 'upi' {
-  return identifier.includes('@') ? 'upi' : 'phone';
-}
+export {
+  normalizeIdentifier,
+  detectType,
+  validateIdentifier,
+  normalizePhone,
+  normalizeUpi,
+  isValidIndianPhone,
+  isValidUpiId,
+} from './identifiers';

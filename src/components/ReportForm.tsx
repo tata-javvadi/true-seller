@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
-import { Plus, Check, AlertCircle, UploadCloud, X } from 'lucide-react';
-import { supabase, normalizeIdentifier, detectType, FRAUD_TYPE_LABELS, type FraudType } from '@/lib/supabase';
+import { Plus, Check, AlertCircle, UploadCloud, X, ChevronRight } from 'lucide-react';
+import { supabase, validateIdentifier, FRAUD_TYPE_LABELS, type FraudType } from '@/lib/supabase';
 
 type SubmitState = 'idle' | 'submitting' | 'success' | 'error';
 
@@ -18,6 +18,7 @@ export function ReportForm() {
   const [fraudType, setFraudType] = useState<FraudType>('payment_scam');
   const [files, setFiles] = useState<File[]>([]);
   const [uploadError, setUploadError] = useState('');
+  const [identifierError, setIdentifierError] = useState('');
   const [state, setState] = useState<SubmitState>('idle');
   const [errorMsg, setErrorMsg] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -51,8 +52,14 @@ export function ReportForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const normalized = normalizeIdentifier(identifier);
-    if (!normalized || !description.trim()) return;
+    if (!description.trim()) return;
+
+    const checked = validateIdentifier(identifier);
+    if (!checked.ok) {
+      setIdentifierError(checked.error);
+      return;
+    }
+    setIdentifierError('');
 
     setState('submitting');
     setErrorMsg('');
@@ -68,8 +75,9 @@ export function ReportForm() {
           .upload(fileName, file);
 
         if (uploadError) {
+          console.error('Fraud screenshot upload failed:', uploadError);
           setState('error');
-          setErrorMsg('Could not upload one or more screenshots. Please try again.');
+          setErrorMsg('Could not upload a screenshot. Please check your connection and try again.');
           return;
         }
         const { data: urlData } = supabase.storage
@@ -79,8 +87,8 @@ export function ReportForm() {
       }
 
       const { error } = await supabase.from('fraud_reports').insert({
-        identifier: normalized,
-        identifier_type: detectType(normalized),
+        identifier: checked.value,
+        identifier_type: checked.type,
         reporter_name: reporterName.trim() || null,
         description: description.trim(),
         amount_lost: amountLost ? parseFloat(amountLost) : null,
@@ -89,46 +97,52 @@ export function ReportForm() {
       });
 
       if (error) {
+        console.error('Fraud report submission failed:', error);
         setState('error');
-        setErrorMsg('Could not submit your report. Please try again.');
+        setErrorMsg(error.code === '23505'
+          ? 'A report for this seller already exists. Please check the number or UPI ID.'
+          : 'Could not submit your report. Please check your connection and try again.');
         return;
       }
 
       setState('success');
       setIdentifier('');
+      setIdentifierError('');
       setReporterName('');
       setDescription('');
       setAmountLost('');
       setFraudType('payment_scam');
       setFiles([]);
-    } catch {
+    } catch (error) {
+      console.error('Unexpected fraud report submission error:', error);
       setState('error');
       setErrorMsg('Something went wrong. Please try again.');
     }
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+    <div className="tsc-report-card bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm shadow-slate-900/[0.03]">
       <button
         onClick={() => {
           setOpen(!open);
           setState('idle');
         }}
-        className="w-full px-6 py-5 flex items-center justify-between hover:bg-slate-50 transition-colors"
+          className="w-full px-4 sm:px-5 py-4 flex items-center justify-between hover:bg-emerald-50/40 transition-colors text-left"
       >
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
-            <Plus className={`w-5 h-5 text-blue-600 transition-transform ${open ? 'rotate-45' : ''}`} />
+          <div className="tsc-report-icon">
+            <Plus className={`w-5 h-5 text-emerald-700 transition-transform ${open ? 'rotate-45' : ''}`} />
           </div>
-          <div className="text-left">
-            <h3 className="font-bold text-slate-800">Report a Fraudulent Seller</h3>
-            <p className="text-sm text-slate-500">Help others by reporting a scammer</p>
+          <div className="tsc-report-copy text-left">
+            <strong>Report a new fraud</strong>
+            <small>Help protect other buyers</small>
           </div>
         </div>
+        <ChevronRight className={`w-5 h-5 text-slate-500 transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden="true" />
       </button>
 
       {open && (
-        <div className="px-6 pb-6 border-t border-slate-100 pt-5">
+        <div className="px-4 sm:px-5 pb-5 border-t border-slate-100 pt-4">
           {state === 'success' ? (
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6 text-center">
               <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-emerald-100 mb-3">
@@ -153,11 +167,25 @@ export function ReportForm() {
                 <input
                   type="text"
                   value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="e.g. 9876543210 or seller@okaxis"
+                  onChange={(e) => {
+                    setIdentifier(e.target.value);
+                    if (identifierError) setIdentifierError('');
+                  }}
+                  placeholder="e.g. 9876543210, +91…, or seller@okaxis"
                   required
-                  className="w-full px-4 py-3 rounded-lg border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  aria-invalid={!!identifierError}
+                  aria-describedby={identifierError ? 'report-identifier-error' : undefined}
+                  className={`w-full min-h-12 px-4 py-3 rounded-xl border text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:border-transparent transition-all ${
+                    identifierError
+                      ? 'border-red-300 focus:ring-red-400'
+                      : 'border-slate-300 focus:ring-emerald-500'
+                  }`}
                 />
+                {identifierError && (
+                  <p id="report-identifier-error" className="text-sm text-red-600 mt-1.5" role="alert">
+                    {identifierError}
+                  </p>
+                )}
               </div>
 
               {/* Fraud type */}
@@ -166,7 +194,7 @@ export function ReportForm() {
                 <select
                   value={fraudType}
                   onChange={(e) => setFraudType(e.target.value as FraudType)}
-                  className="w-full px-4 py-3 rounded-lg border border-slate-200 text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  className="w-full min-h-12 px-4 py-3 rounded-xl border border-slate-300 text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
                 >
                   {FRAUD_TYPES.map((t) => (
                     <option key={t} value={t}>
@@ -187,7 +215,7 @@ export function ReportForm() {
                   placeholder="Describe the fraudulent activity..."
                   required
                   rows={4}
-                  className="w-full px-4 py-3 rounded-lg border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all resize-none"
                 />
               </div>
 
@@ -200,7 +228,7 @@ export function ReportForm() {
                     value={reporterName}
                     onChange={(e) => setReporterName(e.target.value)}
                     placeholder="Your name"
-                    className="w-full px-4 py-3 rounded-lg border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    className="w-full min-h-12 px-4 py-3 rounded-xl border border-slate-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
                   />
                 </div>
 
@@ -213,7 +241,7 @@ export function ReportForm() {
                     onChange={(e) => setAmountLost(e.target.value)}
                     placeholder="0"
                     min="0"
-                    className="w-full px-4 py-3 rounded-lg border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    className="w-full min-h-12 px-4 py-3 rounded-xl border border-slate-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
                   />
                 </div>
               </div>
@@ -225,7 +253,7 @@ export function ReportForm() {
                 </label>
                 <div
                   onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 transition-all"
+                  className="border-2 border-dashed border-slate-300 rounded-xl p-5 text-center cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/50 transition-all"
                 >
                   <UploadCloud className="w-8 h-8 text-slate-400 mx-auto mb-2" />
                   <p className="text-sm text-slate-600 font-medium">Click to upload screenshots</p>
@@ -277,7 +305,7 @@ export function ReportForm() {
               <button
                 type="submit"
                 disabled={state === 'submitting' || !identifier.trim() || !description.trim()}
-                className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-600/20 active:scale-[0.98]"
+                className="w-full sm:w-auto min-h-12 px-8 py-3 rounded-xl bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors active:scale-[0.99]"
               >
                 {state === 'submitting' ? (
                   <span className="flex items-center gap-2">

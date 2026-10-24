@@ -1,101 +1,110 @@
 import { useState, useEffect } from 'react';
-import { ShieldCheck, ShieldAlert, Settings } from 'lucide-react';
+import { ShieldCheck, ArrowLeft, Search, ShieldAlert, CircleCheck } from 'lucide-react';
 import { SearchForm } from '@/components/SearchForm';
 import { ReportForm } from '@/components/ReportForm';
 import { AdminPanel } from '@/components/AdminPanel';
+import './home.css';
 
 type Route = 'home' | 'admin';
 
-function useHashRoute(): [Route, (r: Route) => void] {
-  const [route, setRoute] = useState<Route>(() =>
-    window.location.hash === '#/admin' ? 'admin' : 'home'
-  );
+function getRouteFromPath(): Route {
+  return window.location.pathname === '/admin' || window.location.pathname.startsWith('/admin/')
+    ? 'admin'
+    : 'home';
+}
+
+function usePathRoute(): [Route, (r: Route) => void] {
+  const [route, setRoute] = useState<Route>(getRouteFromPath);
 
   useEffect(() => {
-    const onHashChange = () => {
-      setRoute(window.location.hash === '#/admin' ? 'admin' : 'home');
-    };
-    window.addEventListener('hashchange', onHashChange);
-    return () => window.removeEventListener('hashchange', onHashChange);
+    // Migrate old hash route #/admin → /admin
+    if (window.location.hash === '#/admin') {
+      window.history.replaceState(null, '', '/admin');
+      setRoute('admin');
+    }
+
+    const onPopState = () => setRoute(getRouteFromPath());
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
   const navigate = (r: Route) => {
-    window.location.hash = r === 'admin' ? '#/admin' : '';
+    const path = r === 'admin' ? '/admin' : '/';
+    if (window.location.pathname !== path) {
+      window.history.pushState(null, '', path);
+    }
+    setRoute(r);
   };
 
   return [route, navigate];
 }
 
 function App() {
-  const [route, navigate] = useHashRoute();
+  const [route, navigate] = usePathRoute();
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-slate-200">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <button onClick={() => navigate('home')} className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-600/20">
-              <ShieldCheck className="w-6 h-6 text-white" />
+    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
+      <header className="sticky top-0 z-50 bg-white border-b border-slate-200">
+        <div className="max-w-xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+          <button onClick={() => navigate('home')} className="flex items-center gap-2.5 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-md shadow-emerald-700/20 flex-shrink-0">
+              <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
-            <div className="text-left">
-              <h1 className="font-bold text-slate-800 leading-none">TrueSellerCheck</h1>
-              <p className="text-xs text-slate-500 mt-0.5">Check Before You Pay</p>
+            <div className="text-left min-w-0">
+              <h1 className="font-bold text-slate-900 leading-none text-sm sm:text-base truncate">
+                True Seller Check
+              </h1>
+              <p className="text-[11px] text-slate-500 mt-0.5">Check Before You Pay</p>
             </div>
           </button>
-          <button
-            onClick={() => navigate(route === 'admin' ? 'home' : 'admin')}
-            className="flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors"
-          >
-            <Settings className="w-4 h-4" />
-            {route === 'admin' ? 'Back to Home' : 'Admin'}
-          </button>
+
+          {route === 'admin' && (
+            <button
+              onClick={() => navigate('home')}
+              className="flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 bg-slate-50 px-3 py-2 rounded-xl transition-colors flex-shrink-0"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span className="hidden sm:inline">Back to Home</span>
+              <span className="sm:hidden">Home</span>
+            </button>
+          )}
         </div>
       </header>
 
       {route === 'admin' ? (
-        <main className="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-6 py-10">
-          <h2 className="text-2xl font-bold text-slate-800 mb-6">Admin Panel</h2>
+        <main className="flex-1 w-full max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
           <AdminPanel />
         </main>
       ) : (
-        <main className="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-6 py-12 flex flex-col justify-center">
-          {/* Hero */}
-          <div className="text-center mb-10">
-            <div className="inline-flex items-center gap-2 bg-emerald-100 text-emerald-700 px-4 py-1.5 rounded-full text-sm font-medium mb-6">
-              <ShieldAlert className="w-4 h-4" />
-              Protect yourself from payment fraud
-            </div>
-            <h2 className="text-3xl sm:text-5xl font-bold text-slate-800 leading-tight mb-4">
-              Is that seller safe to pay?
-            </h2>
-            <p className="text-lg text-slate-600 max-w-xl mx-auto">
-              Enter a phone number or UPI ID to check it against our community fraud database before you make a payment.
-            </p>
-          </div>
-
-          {/* Search */}
-          <div className="mb-10">
-            <SearchForm />
-          </div>
-
-          {/* Report */}
+        <main className="flex-1 tsc">
+          <section className="tsc-hero">
+            <svg className="tsc-hero-bg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6l7-3z" /></svg>
+            <p className="tsc-eyebrow">BUY WITH CONFIDENCE</p>
+            <h2 className="tsc-title">True Seller<br /><span className="tsc-title-accent">Check <ShieldCheck aria-hidden="true" /></span></h2>
+            <p className="tsc-sub">Check a phone number or UPI ID against reports from other buyers.</p>
+          </section>
+          <SearchForm />
+          <section className="tsc-steps" aria-label="How it works">
+            <div className="tsc-step"><span className="tsc-step-icon"><Search /></span><strong>1. Search</strong><p>Enter a seller’s number or UPI</p></div>
+            <div className="tsc-step"><span className="tsc-step-icon"><ShieldAlert /></span><strong>2. See reports</strong><p>Check reports from other buyers</p></div>
+            <div className="tsc-step"><span className="tsc-step-icon"><CircleCheck /></span><strong>3. Decide</strong><p>Make an informed choice</p></div>
+          </section>
           <ReportForm />
         </main>
       )}
 
-      {/* Footer */}
-      <footer className="bg-slate-900 py-8">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
+      <footer className="bg-white border-t border-slate-200 py-5 mt-auto">
+        <div className="max-w-xl mx-auto px-4 text-center">
           <div className="flex items-center justify-center gap-2 mb-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
               <ShieldCheck className="w-5 h-5 text-white" />
             </div>
-            <span className="font-bold text-white">TrueSellerCheck</span>
+            <span className="font-bold text-slate-800">True Seller Check</span>
           </div>
-          <p className="text-slate-500 text-sm">Check Before You Pay — community-powered fraud prevention</p>
-          <p className="text-slate-600 text-xs mt-2">
-            TrueSellerCheck is an informational tool. A "no match" result does not guarantee a seller is safe.
+          <p className="text-slate-500 text-xs">Community-powered fraud prevention</p>
+          <p className="text-slate-500 text-xs mt-2 max-w-md mx-auto leading-relaxed">
+            TrueSellerCheck is an informational tool. A &quot;no match&quot; result does not guarantee a seller is
+            safe.
           </p>
         </div>
       </footer>

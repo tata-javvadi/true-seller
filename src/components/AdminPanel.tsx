@@ -1,48 +1,42 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Check, X, Clock, Phone, CreditCard, AlertCircle, LogOut } from 'lucide-react';
-import { supabase, FRAUD_TYPE_LABELS, FRAUD_TYPE_COLORS, STATUS_COLORS, type FraudReport } from '@/lib/supabase';
-import { AdminAuth } from './AdminAuth';
+import {
+  Check,
+  X,
+  Clock,
+  Phone,
+  CreditCard,
+  AlertCircle,
+  LogOut,
+  Shield,
+} from 'lucide-react';
+import {
+  supabase,
+  FRAUD_TYPE_LABELS,
+  FRAUD_TYPE_COLORS,
+  STATUS_COLORS,
+  type FraudReport,
+} from '@/lib/supabase';
+import { AdminAuth, ADMIN_SESSION_KEY } from './AdminAuth';
+
+const ADMIN_REVIEWER = 'admin';
 
 export function AdminPanel() {
-  const [session, setSession] = useState<boolean | null>(null);
-  const [adminEmail, setAdminEmail] = useState('');
+  const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem(ADMIN_SESSION_KEY) === '1');
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(!!data.session);
-      if (data.session?.user?.email) setAdminEmail(data.session.user.email);
-    });
-
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      (async () => {
-        setSession(!!session);
-        if (session?.user?.email) setAdminEmail(session.user.email);
-      })();
-    });
-
-    return () => authListener.subscription.unsubscribe();
+  const handleLock = useCallback(() => {
+    sessionStorage.removeItem(ADMIN_SESSION_KEY);
+    void supabase.auth.signOut();
+    setUnlocked(false);
   }, []);
 
-  const handleSignOut = useCallback(async () => {
-    await supabase.auth.signOut();
-  }, []);
-
-  if (session === null) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <span className="w-6 h-6 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
-      </div>
-    );
+  if (!unlocked) {
+    return <AdminAuth onSuccess={() => setUnlocked(true)} />;
   }
 
-  if (!session) {
-    return <AdminAuth />;
-  }
-
-  return <AdminDashboard adminEmail={adminEmail} onSignOut={handleSignOut} />;
+  return <AdminDashboard onLock={handleLock} />;
 }
 
-function AdminDashboard({ adminEmail, onSignOut }: { adminEmail: string; onSignOut: () => Promise<void> }) {
+function AdminDashboard({ onLock }: { onLock: () => void }) {
   const [pending, setPending] = useState<FraudReport[]>([]);
   const [reviewed, setReviewed] = useState<FraudReport[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,10 +45,19 @@ function AdminDashboard({ adminEmail, onSignOut }: { adminEmail: string; onSignO
   const [tab, setTab] = useState<'pending' | 'reviewed'>('pending');
 
   const loadReports = useCallback(async () => {
-    const [{ data: pendingData }, { data: reviewedData }] = await Promise.all([
+    const [{ data: pendingData, error: pendingError }, { data: reviewedData, error: reviewedError }] = await Promise.all([
       supabase.from('fraud_reports').select('*').eq('status', 'pending').order('created_at', { ascending: false }),
-      supabase.from('fraud_reports').select('*').in('status', ['approved', 'rejected']).order('updated_at', { ascending: false }),
+      supabase
+        .from('fraud_reports')
+        .select('*')
+        .in('status', ['approved', 'rejected'])
+        .order('updated_at', { ascending: false }),
     ]);
+    if (pendingError || reviewedError) {
+      setError('Could not load reports. Sign in with an authorized admin account and try again.');
+    } else {
+      setError('');
+    }
     setPending((pendingData ?? []) as FraudReport[]);
     setReviewed((reviewedData ?? []) as FraudReport[]);
     setLoading(false);
@@ -69,7 +72,7 @@ function AdminDashboard({ adminEmail, onSignOut }: { adminEmail: string; onSignO
     setError('');
     const { error } = await supabase.rpc('approve_fraud_report', {
       p_report_id: id,
-      p_admin_email: adminEmail,
+      p_admin_email: ADMIN_REVIEWER,
     });
     if (error) {
       setError('Could not approve report. Please try again.');
@@ -85,7 +88,7 @@ function AdminDashboard({ adminEmail, onSignOut }: { adminEmail: string; onSignO
     setError('');
     const { error } = await supabase.rpc('reject_fraud_report', {
       p_report_id: id,
-      p_admin_email: adminEmail,
+      p_admin_email: ADMIN_REVIEWER,
     });
     if (error) {
       setError('Could not reject report. Please try again.');
@@ -99,53 +102,57 @@ function AdminDashboard({ adminEmail, onSignOut }: { adminEmail: string; onSignO
   const reports = tab === 'pending' ? pending : reviewed;
 
   return (
-    <div>
+    <div className="animate-fade-in">
       {/* Admin header bar */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-lg bg-slate-800 flex items-center justify-center">
-            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 11c0 1.105-.895 2-2 2s-2-.895-2-2 .895-2 2-2 2 .895 2 2zm0 0c0 1.105.895 2 2 2s2-.895 2-2-.895-2-2-2-2 .895-2 2zm0 0V7m0 4v4m-7-2h14" />
-            </svg>
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 mb-5 sm:mb-6 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center flex-shrink-0 shadow-md shadow-slate-900/20">
+            <Shield className="w-5 h-5 text-white" />
           </div>
-          <div>
-            <p className="text-sm font-semibold text-slate-800">Signed in as {adminEmail}</p>
-            <p className="text-xs text-slate-400">Admin Panel</p>
+          <div className="min-w-0">
+            <p className="text-sm sm:text-base font-semibold text-slate-800 truncate">Admin Panel</p>
+            <p className="text-xs text-slate-400">Review community fraud reports</p>
           </div>
         </div>
         <button
-          onClick={onSignOut}
-          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 transition-colors"
+          onClick={onLock}
+          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-2 rounded-xl transition-colors flex-shrink-0"
         >
           <LogOut className="w-4 h-4" />
-          Sign Out
+          <span className="hidden sm:inline">Lock</span>
         </button>
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-100 rounded-lg p-3 mb-4">
+        <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-100 rounded-xl p-3.5 mb-4">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
           <p className="text-sm">{error}</p>
         </div>
       )}
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-4 p-1 bg-slate-100/80 rounded-xl">
         <button
           onClick={() => setTab('pending')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-            tab === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-white text-slate-500 border border-slate-200'
+          className={`flex-1 px-3 sm:px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+            tab === 'pending'
+              ? 'bg-white text-amber-700 shadow-sm'
+              : 'text-slate-500 hover:text-slate-700'
           }`}
         >
-          Pending ({pending.length})
+          Pending
+          <span className="ml-1.5 tabular-nums opacity-80">({pending.length})</span>
         </button>
         <button
           onClick={() => setTab('reviewed')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-            tab === 'reviewed' ? 'bg-slate-100 text-slate-700' : 'bg-white text-slate-500 border border-slate-200'
+          className={`flex-1 px-3 sm:px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+            tab === 'reviewed'
+              ? 'bg-white text-slate-700 shadow-sm'
+              : 'text-slate-500 hover:text-slate-700'
           }`}
         >
-          Reviewed ({reviewed.length})
+          Reviewed
+          <span className="ml-1.5 tabular-nums opacity-80">({reviewed.length})</span>
         </button>
       </div>
 
@@ -154,14 +161,14 @@ function AdminDashboard({ adminEmail, onSignOut }: { adminEmail: string; onSignO
           <span className="w-6 h-6 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
         </div>
       ) : reports.length === 0 ? (
-        <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center">
+        <div className="bg-white border border-slate-200 rounded-2xl p-10 sm:p-12 text-center">
           <Clock className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-          <p className="text-slate-500">
+          <p className="text-slate-500 text-sm sm:text-base">
             {tab === 'pending' ? 'No pending reports to review.' : 'No reviewed reports yet.'}
           </p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3 sm:space-y-4">
           {reports.map((report) => (
             <AdminReportCard
               key={report.id}
@@ -189,16 +196,15 @@ function AdminReportCard({
   isActioning: boolean;
 }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-5">
-      {/* Top row: identifier + type + status */}
-      <div className="flex flex-wrap items-center gap-2 mb-4">
-        <div className="flex items-center gap-2 bg-slate-100 rounded-lg px-3 py-1.5">
+    <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm shadow-slate-900/[0.02]">
+      <div className="flex flex-wrap items-center gap-2 mb-3 sm:mb-4">
+        <div className="flex items-center gap-2 bg-slate-100 rounded-lg px-3 py-1.5 max-w-full">
           {report.identifier_type === 'phone' ? (
-            <Phone className="w-4 h-4 text-slate-500" />
+            <Phone className="w-4 h-4 text-slate-500 flex-shrink-0" />
           ) : (
-            <CreditCard className="w-4 h-4 text-slate-500" />
+            <CreditCard className="w-4 h-4 text-slate-500 flex-shrink-0" />
           )}
-          <span className="font-mono font-semibold text-slate-800 text-sm">{report.identifier}</span>
+          <span className="font-mono font-semibold text-slate-800 text-sm truncate">{report.identifier}</span>
         </div>
         <span className={`px-2.5 py-1 rounded-md text-xs font-semibold border ${FRAUD_TYPE_COLORS[report.fraud_type]}`}>
           {FRAUD_TYPE_LABELS[report.fraud_type]}
@@ -208,12 +214,17 @@ function AdminReportCard({
         </span>
       </div>
 
-      {/* Description */}
       <p className="text-slate-700 text-sm mb-3 leading-relaxed">{report.description}</p>
 
-      {/* Meta */}
-      <div className="flex flex-wrap gap-4 text-xs text-slate-400 mb-3">
-        <span>Submitted {new Date(report.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+      <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-slate-400 mb-3">
+        <span>
+          Submitted{' '}
+          {new Date(report.created_at).toLocaleDateString('en-IN', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+          })}
+        </span>
         {report.amount_lost !== null && Number(report.amount_lost) > 0 && (
           <span>Amount lost: ₹{Number(report.amount_lost).toLocaleString('en-IN')}</span>
         )}
@@ -228,7 +239,6 @@ function AdminReportCard({
         )}
       </div>
 
-      {/* Screenshots */}
       {report.screenshot_urls && report.screenshot_urls.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-4">
           {report.screenshot_urls.map((url, i) => (
@@ -237,7 +247,7 @@ function AdminReportCard({
               href={url}
               target="_blank"
               rel="noopener noreferrer"
-              className="block w-20 h-20 rounded-lg overflow-hidden border border-slate-200 hover:border-slate-400 transition-colors"
+              className="block w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border border-slate-200 hover:border-slate-400 transition-colors"
             >
               <img src={url} alt={`Evidence ${i + 1}`} className="w-full h-full object-cover" />
             </a>
@@ -245,27 +255,26 @@ function AdminReportCard({
         </div>
       )}
 
-      {/* Actions */}
       {report.status === 'pending' && (
-        <div className="flex gap-3">
-          <button
-            onClick={() => onApprove(report.id)}
-            disabled={isActioning}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          >
-            <Check className="w-4 h-4" />
-            Approve
-          </button>
+        <div className="flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3">
           <button
             onClick={() => onReject(report.id)}
             disabled={isActioning}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-white border border-slate-300 text-slate-600 text-sm font-medium hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            className="flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-3 sm:py-2.5 rounded-xl bg-white border border-slate-300 text-slate-600 text-sm font-medium hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.98]"
           >
             <X className="w-4 h-4" />
             Reject
           </button>
+          <button
+            onClick={() => onApprove(report.id)}
+            disabled={isActioning}
+            className="flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-3 sm:py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.98] shadow-sm shadow-emerald-600/20"
+          >
+            <Check className="w-4 h-4" />
+            Approve
+          </button>
           {isActioning && (
-            <span className="w-5 h-5 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin self-center" />
+            <span className="w-5 h-5 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin self-center mx-auto sm:mx-0" />
           )}
         </div>
       )}

@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import jsQR from 'jsqr';
-import { Search, QrCode, ImageUp } from 'lucide-react';
+import { Search, ImageUp, Camera } from 'lucide-react';
 import { supabase, validateIdentifier, detectType, type FraudReport } from '@/lib/supabase';
 import { ResultCard } from './ResultCard';
 
@@ -57,6 +57,7 @@ export function SearchForm() {
   const [qrError, setQrError] = useState('');
   const [decodingQr, setDecodingQr] = useState(false);
   const qrInputRef = useRef<HTMLInputElement>(null);
+  const qrCameraInputRef = useRef<HTMLInputElement>(null);
 
   const runSearch = useCallback(async (value: string, identifierMode: 'phone' | 'upi', source: 'phone' | 'upi' | 'qr' = identifierMode) => {
     const checked = validateIdentifier(value, identifierMode);
@@ -157,11 +158,19 @@ export function SearchForm() {
         {mode === 'qr' ? (
           <>
             <label className="tsc-label" htmlFor="seller-qr">Upload seller’s UPI QR code</label>
+            <input ref={qrCameraInputRef} type="file" accept="image/*" capture="environment" className="sr-only" onChange={(event) => void handleQrFile(event.target.files?.[0])} />
             <input ref={qrInputRef} id="seller-qr" type="file" accept="image/*" className="sr-only" onChange={(event) => void handleQrFile(event.target.files?.[0])} />
-            <button type="button" className="tsc-qr-upload" onClick={() => qrInputRef.current?.click()} disabled={decodingQr}>
-              <ImageUp aria-hidden="true" />
-              <span>{decodingQr ? 'Reading QR code…' : 'Take a photo or choose an image'}</span>
-            </button>
+            <div className="tsc-qr-options">
+              <button type="button" className="tsc-qr-upload" onClick={() => qrCameraInputRef.current?.click()} disabled={decodingQr}>
+                <Camera aria-hidden="true" />
+                <span>Use camera</span>
+              </button>
+              <button type="button" className="tsc-qr-upload" onClick={() => qrInputRef.current?.click()} disabled={decodingQr}>
+                <ImageUp aria-hidden="true" />
+                <span>Choose from gallery</span>
+              </button>
+            </div>
+            {decodingQr && <p className="tsc-qr-hint" role="status">Reading QR code…</p>}
             <p className="tsc-qr-hint">We’ll extract the UPI ID and check it against fraud reports.</p>
             {qrError && <p className="tsc-field-error" role="alert">{qrError}</p>}
           </>

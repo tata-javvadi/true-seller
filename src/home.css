@@ -54,7 +54,8 @@
 .tsc-input > svg { width: 19px; height: 19px; flex: 0 0 auto; }
 .tsc-input input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 16px; }
 .tsc-input input::placeholder { color: #7b86aa; }
-.tsc-qr-upload { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 82px; padding: 14px; border: 2px dashed #687bd0; border-radius: 14px; background: #f7f8ff; color: var(--navy); font-size: 13px; font-weight: 700; }
+.tsc-qr-options { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.tsc-qr-upload { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 82px; padding: 12px 8px; border: 2px dashed #687bd0; border-radius: 14px; background: #f7f8ff; color: var(--navy); font-size: 12px; font-weight: 700; text-align: center; }
 .tsc-qr-upload:disabled { opacity: .65; }
 .tsc-qr-upload svg { width: 21px; height: 21px; color: var(--blue); flex: 0 0 auto; }
 .tsc-qr-hint { margin: 8px 2px 0; color: var(--muted); font-size: 11px; line-height: 1.45; }

@@ -58,7 +58,7 @@ export function SearchForm() {
   const [decodingQr, setDecodingQr] = useState(false);
   const qrInputRef = useRef<HTMLInputElement>(null);
 
-  const runSearch = useCallback(async (value: string, identifierMode: 'phone' | 'upi') => {
+  const runSearch = useCallback(async (value: string, identifierMode: 'phone' | 'upi', source: 'phone' | 'upi' | 'qr' = identifierMode) => {
     const checked = validateIdentifier(value, identifierMode);
     if (!checked.ok) {
       setValidationError(checked.error);
@@ -83,6 +83,15 @@ export function SearchForm() {
         setState('error');
         return;
       }
+
+      const { error: logError } = await supabase.from('search_logs').insert({
+        identifier: checked.value,
+        identifier_type: detectType(checked.value),
+        search_source: source,
+        result: data ? 'found' : 'not_found',
+        matched_report_id: data?.id ?? null,
+      });
+      if (logError) console.error('Could not log search:', logError);
 
       if (data) {
         setResult(data as FraudReport);
@@ -128,7 +137,7 @@ export function SearchForm() {
       }
       setQuery(upiId);
       setMode('upi');
-      await runSearch(upiId, 'upi');
+      await runSearch(upiId, 'upi', 'qr');
     } catch {
       setQrError('Could not open this image. Please choose a JPG or PNG QR image.');
     } finally {
@@ -148,7 +157,7 @@ export function SearchForm() {
         {mode === 'qr' ? (
           <>
             <label className="tsc-label" htmlFor="seller-qr">Upload seller’s UPI QR code</label>
-            <input ref={qrInputRef} id="seller-qr" type="file" accept="image/*" capture="environment" className="sr-only" onChange={(event) => void handleQrFile(event.target.files?.[0])} />
+            <input ref={qrInputRef} id="seller-qr" type="file" accept="image/*" className="sr-only" onChange={(event) => void handleQrFile(event.target.files?.[0])} />
             <button type="button" className="tsc-qr-upload" onClick={() => qrInputRef.current?.click()} disabled={decodingQr}>
               <ImageUp aria-hidden="true" />
               <span>{decodingQr ? 'Reading QR code…' : 'Take a photo or choose an image'}</span>
@@ -185,7 +194,7 @@ export function SearchForm() {
         )}
         {mode !== 'qr' && <button
           type="submit"
-          disabled={state === 'searching' || !query.trim()}
+          disabled={state === 'searching'}
           className="tsc-cta"
         >
           {state === 'searching' ? (

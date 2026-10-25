@@ -17,6 +17,8 @@ import {
   type FraudReport,
 } from '@/lib/supabase';
 import { AdminAuth, ADMIN_SESSION_KEY } from './AdminAuth';
+import { AdminAnalytics } from './AdminAnalytics';
+import { ContactInbox } from './ContactInbox';
 
 const ADMIN_REVIEWER = 'admin';
 
@@ -129,6 +131,9 @@ function AdminDashboard({ onLock }: { onLock: () => void }) {
           <p className="text-sm">{error}</p>
         </div>
       )}
+
+      <AdminAnalytics />
+      <ContactInbox />
 
       {/* Tabs */}
       <div className="flex gap-2 mb-4 p-1 bg-slate-100/80 rounded-xl">

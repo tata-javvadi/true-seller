@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { ShieldCheck, ArrowLeft, Search, ShieldAlert, CircleCheck } from 'lucide-react';
 import { SearchForm } from '@/components/SearchForm';
 import { ReportForm } from '@/components/ReportForm';
+import { ContactForm } from '@/components/ContactForm';
 import { AdminPanel } from '@/components/AdminPanel';
+import { supabase } from '@/lib/supabase';
 import './home.css';
 
 type Route = 'home' | 'admin';
@@ -41,6 +43,13 @@ function usePathRoute(): [Route, (r: Route) => void] {
 
 function App() {
   const [route, navigate] = usePathRoute();
+
+  useEffect(() => {
+    if (route !== 'home') return;
+    void supabase.from('site_visits').insert({}).then(({ error }) => {
+      if (error) console.error('Could not log site visit:', error);
+    });
+  }, [route]);
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
@@ -81,7 +90,7 @@ function App() {
             <svg className="tsc-hero-bg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6l7-3z" /></svg>
             <p className="tsc-eyebrow">INDIA'S SCAM DATABASE</p>
             <h2 className="tsc-title">True Seller<br /><span className="tsc-title-accent">Check <ShieldCheck aria-hidden="true" /></span></h2>
-            <p className="tsc-sub">Check a phone number or UPI ID against reports from other buyers.</p>
+            <p className="tsc-sub">Check a Phone Number or UPI ID or QR Code against reports from other buyers.</p>
           </section>
           <SearchForm />
           <section className="tsc-steps" aria-label="How it works">
@@ -90,6 +99,7 @@ function App() {
             <div className="tsc-step"><span className="tsc-step-icon"><CircleCheck /></span><strong>3. Decide</strong><p>Make an informed choice</p></div>
           </section>
           <ReportForm />
+          <ContactForm />
         </main>
       )}
 

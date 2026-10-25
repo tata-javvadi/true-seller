@@ -1,13 +1,14 @@
 export type IdentifierType = 'phone' | 'upi';
 
-/** Strip spaces/dashes, then drop +91 (13 chars) or 91 (12 chars) for Indian mobiles. */
+/** Accepts only: 10 digits, +91 + 10 digits, or 91 + 10 digits. Returns the 10-digit number; anything else is returned unchanged so validation rejects it. */
 export function normalizePhone(input: string): string {
-  let cleaned = input.trim().replace(/[\s\-().]/g, '');
+  const cleaned = input.trim();
 
-  if (cleaned.length === 13 && cleaned.startsWith('+91')) {
-    cleaned = cleaned.slice(3);
-  } else if (cleaned.length === 12 && cleaned.startsWith('91')) {
-    cleaned = cleaned.slice(2);
+  if (/^\+91\d{10}$/.test(cleaned)) {
+    return cleaned.slice(3);
+  }
+  if (/^91\d{10}$/.test(cleaned)) {
+    return cleaned.slice(2);
   }
 
   return cleaned;

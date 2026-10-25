@@ -71,17 +71,38 @@
 .tsc-step strong { display: block; margin-top: 8px; font-size: 11px; line-height: 1.25; }
 .tsc-step p { margin: 3px 0 0; color: var(--muted); font-size: 10px; line-height: 1.35; }
 
-.tsc-report-card { margin: 0 16px; border: 1.5px solid #aebcf2; border-radius: 18px; background: linear-gradient(135deg,#fff,#f8f9ff); box-shadow: 0 4px 12px rgba(31,42,138,.07); overflow: hidden; }
-.tsc-report-card > button { padding: 12px 14px !important; }
-.tsc-report-card .tsc-report-icon { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex: 0 0 auto; border-radius: 13px; background: #e4e9ff; color: var(--blue); }
-.tsc-report-card .tsc-report-icon svg { width: 21px; height: 21px; }
-.tsc-report-card .tsc-report-copy { flex: 1; min-width: 0; }
-.tsc-report-card .tsc-report-copy strong { display: block; color: var(--ink); font-size: 14px; }
-.tsc-report-card .tsc-report-copy small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; }
+.tsc-report-card { margin: 16px 16px 0; overflow: visible; }
+.tsc-report {
+  position: relative; overflow: hidden; width: 100%; min-height: 82px; margin: 0; padding: 14px 16px;
+  display: flex; align-items: center; gap: 13px; border: 1.5px solid #8999eb; border-radius: 20px; text-align: left; color: #fff;
+  background: linear-gradient(135deg,var(--navy),var(--blue)); box-shadow: 0 8px 20px rgba(31,42,138,.2);
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.tsc-report:active { transform: scale(.985); box-shadow: 0 4px 12px rgba(31,42,138,.2); }
+.tsc-report:focus-visible { outline: 3px solid #6d28d9; outline-offset: 3px; }
+.tsc-report-bg { position: absolute; right: 30px; top: -24px; }
+.tsc-report-icon { position: relative; display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; flex-shrink: 0; border-radius: 15px; background: #fff; }
+.tsc-report-text { position: relative; display: flex; flex: 1; flex-direction: column; }
+.tsc-report-text strong { font-size: 16px; font-weight: 800; letter-spacing: -.3px; }
+.tsc-report-text small { margin-top: 3px; color: #e2e8ff; font-size: 12px; font-weight: 500; }
+.tsc-report-arrow { position: relative; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: 50%; background: #fff; transition: transform .2s ease; }
+.tsc-report-arrow.is-open { transform: rotate(90deg); }
+.tsc-report-content { margin: 10px 0 0; border: 1.5px solid #aebcf2; border-radius: 18px; background: #fff; box-shadow: 0 4px 12px rgba(31,42,138,.07); }
 .tsc-report-card form { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
 .tsc-report-card input, .tsc-report-card textarea, .tsc-report-card select { font-size: 16px; }
 .tsc-report-card input:not([type='file']), .tsc-report-card textarea, .tsc-report-card select { border-color: #8796d1 !important; border-width: 1.5px !important; }
 .tsc-report-card input:not([type='file']):focus, .tsc-report-card textarea:focus, .tsc-report-card select:focus { border-color: #304bd5 !important; box-shadow: 0 0 0 3px rgba(59,91,255,.13); }
+
+.contact-card { margin: 10px 16px 0; padding: 7px 11px; border: 1px solid #c3ccef; border-radius: 14px; background: #fff; box-shadow: 0 2px 6px rgba(31,42,138,.04); }
+.contact-toggle { min-height: 38px; gap: 9px; }
+.contact-toggle > span:first-child { width: 30px !important; height: 30px !important; border-radius: 9px !important; }
+.contact-toggle > span:first-child svg { width: 16px; height: 16px; }
+.contact-toggle h2 { font-size: 13px; line-height: 1.2; }
+.contact-toggle p { margin-top: 2px; font-size: 10px; line-height: 1.2; }
+.contact-toggle > svg { width: 16px; height: 16px; }
+.contact-toggle:focus-visible { outline: 3px solid rgba(59,91,255,.35); outline-offset: 3px; border-radius: 10px; }
+.contact-field { display: block; width: 100%; min-height: 46px; box-sizing: border-box; border: 1.5px solid #8796d1; border-radius: 11px; background: #fff; padding: 10px 12px; color: #101a3b; font-size: 16px; line-height: 1.45; }
+.contact-field:focus { outline: none; border-color: #304bd5; box-shadow: 0 0 0 3px rgba(59,91,255,.13); }
 
 @media (max-width: 360px) {
   .tsc-hero { margin-inline: 12px; padding-inline: 19px; }
@@ -91,4 +112,7 @@
   .tsc-step strong { font-size: 10px; }
   .tsc-step p { font-size: 9px; }
   .tsc-report-card { margin-inline: 12px; }
+  .tsc-report { width: 100%; margin: 0; padding: 13px; gap: 10px; }
+  .tsc-report-text strong { font-size: 16px; }
+  .tsc-report-arrow { width: 34px; height: 34px; }
 }

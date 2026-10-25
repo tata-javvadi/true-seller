@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Plus, Check, AlertCircle, UploadCloud, X, ChevronRight } from 'lucide-react';
+import { Check, AlertCircle, UploadCloud, X } from 'lucide-react';
 import { supabase, validateIdentifier, FRAUD_TYPE_LABELS, type FraudType } from '@/lib/supabase';
 
 type SubmitState = 'idle' | 'submitting' | 'success' | 'error';
@@ -121,28 +121,38 @@ export function ReportForm() {
   };
 
   return (
-    <div className="tsc-report-card bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm shadow-slate-900/[0.03]">
+    <div className="tsc-report-card">
       <button
         onClick={() => {
           setOpen(!open);
           setState('idle');
         }}
-          className="w-full px-4 sm:px-5 py-4 flex items-center justify-between hover:bg-emerald-50/40 transition-colors text-left"
+        aria-expanded={open}
+        className="tsc-report"
       >
-        <div className="flex items-center gap-3">
-          <div className="tsc-report-icon">
-            <Plus className={`w-5 h-5 text-emerald-700 transition-transform ${open ? 'rotate-45' : ''}`} />
-          </div>
-          <div className="tsc-report-copy text-left">
+        <svg className="tsc-report-bg" width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M12 3l9 16H3L12 3z" />
+        </svg>
+        <span className="tsc-report-icon">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#B93C0A" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M5 21V4" />
+            <path d="M5 4h12l-2 4 2 4H5" />
+          </svg>
+        </span>
+        <span className="tsc-report-text">
             <strong>Report a new fraud</strong>
             <small>Help protect other buyers</small>
-          </div>
-        </div>
-        <ChevronRight className={`w-5 h-5 text-slate-500 transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden="true" />
+        </span>
+        <span className={`tsc-report-arrow ${open ? 'is-open' : ''}`}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B93C0A" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M5 12h14" />
+            <path d="M13 6l6 6-6 6" />
+          </svg>
+        </span>
       </button>
 
       {open && (
-        <div className="px-4 sm:px-5 pb-5 border-t border-slate-100 pt-4">
+        <div className="tsc-report-content px-4 sm:px-5 pb-5 pt-4">
           {state === 'success' ? (
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6 text-center">
               <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-emerald-100 mb-3">

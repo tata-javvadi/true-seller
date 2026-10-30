@@ -54,7 +54,7 @@ function App() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
       {route === 'admin' && <header className="sticky top-0 z-50 bg-white border-b border-slate-200">
-        <div className="max-w-xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3 w-full">
           <button onClick={() => navigate('home')} className="flex items-center gap-2.5 min-w-0">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-md shadow-emerald-700/20 flex-shrink-0">
               <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
@@ -81,7 +81,7 @@ function App() {
       </header>}
 
       {route === 'admin' ? (
-        <main className="flex-1 w-full max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+        <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
           <AdminPanel />
         </main>
       ) : (

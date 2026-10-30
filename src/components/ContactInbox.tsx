@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { MessageCircle, RefreshCw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MessageCircle, RefreshCw, Search } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 type ContactMessage = { id: string; name: string; phone_number: string; message: string; created_at: string };
@@ -14,6 +14,9 @@ export function ContactInbox() {
   const [messages, setMessages] = useState<ContactMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [query, setQuery] = useState('');
+  const [page, setPage] = useState(0);
+  const pageSize = 8;
 
   const loadMessages = useCallback(async () => {
     setLoading(true);
@@ -30,15 +33,20 @@ export function ContactInbox() {
 
   useEffect(() => { void loadMessages(); }, [loadMessages]);
 
+  const filteredMessages = messages.filter((item) => !query.trim() || `${item.name} ${item.phone_number} ${item.message}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const pageCount = Math.max(1, Math.ceil(filteredMessages.length / pageSize));
+  const visibleMessages = filteredMessages.slice(page * pageSize, (page + 1) * pageSize);
+
   return (
     <section className="mb-7 rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm sm:p-5" aria-labelledby="contact-inbox-title">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div><div className="flex items-center gap-2"><MessageCircle className="h-5 w-5 text-emerald-700" /><h2 id="contact-inbox-title" className="text-lg font-bold text-slate-900">Contact messages</h2><span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-800">{messages.length}</span></div><p className="mt-1 text-xs text-slate-500">Latest 100 messages. Contact users directly on WhatsApp.</p></div>
         <button type="button" onClick={() => void loadMessages()} disabled={loading} aria-label="Refresh contact messages" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></button>
       </div>
-      {error ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}</p> : loading ? <div className="py-8 text-center text-sm text-slate-500">Loading messages…</div> : messages.length === 0 ? <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">No contact messages yet.</div> : (
+      {!error && !loading && messages.length > 0 && <label className="relative mb-4 block"><span className="sr-only">Search contact messages</span><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(0); }} placeholder="Search name, phone or message" className="h-11 w-full rounded-xl border border-slate-300 pl-9 pr-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" /></label>}
+      {error ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}</p> : loading ? <div className="py-8 text-center text-sm text-slate-500">Loading messages…</div> : messages.length === 0 ? <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">No contact messages yet.</div> : filteredMessages.length === 0 ? <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">No messages match your search.</div> : (
         <div className="space-y-3">
-          {messages.map((item) => {
+          {visibleMessages.map((item) => {
             const target = whatsappNumber(item.phone_number);
             const url = `https://wa.me/${target}?text=${encodeURIComponent(`Hi ${item.name}, we received your message on True Seller Check.`)}`;
             return <article key={item.id} className="rounded-xl border border-slate-200 p-3.5 sm:p-4">
@@ -52,6 +60,7 @@ export function ContactInbox() {
           })}
         </div>
       )}
+      {!error && !loading && filteredMessages.length > 0 && <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3"><span className="text-xs text-slate-500">{filteredMessages.length} matching · page {page + 1} of {pageCount}</span><div className="flex gap-2"><button type="button" onClick={() => setPage((current) => Math.max(0, current - 1))} disabled={page === 0} aria-label="Previous messages" className="grid h-9 w-9 place-items-center rounded-lg border border-slate-300 text-slate-700 disabled:opacity-40"><ChevronLeft className="h-4 w-4" /></button><button type="button" onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))} disabled={page + 1 >= pageCount} aria-label="Next messages" className="grid h-9 w-9 place-items-center rounded-lg border border-slate-300 text-slate-700 disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button></div></div>}
     </section>
   );
 }

@@ -103,9 +103,16 @@ export function AdminAnalytics() {
 
   return (
     <section className="mb-7 space-y-4" aria-labelledby="analytics-title">
-      <div className="flex items-start justify-between gap-3">
-        <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-indigo-700">Traffic & activity</p><h2 id="analytics-title" className="mt-1 text-xl sm:text-2xl font-bold text-slate-900">Dashboard overview</h2><p className="mt-1 text-xs text-slate-500">Search metrics and recent searches: {selectedRangeLabel.toLowerCase()}.</p></div>
-        <button onClick={() => { void loadAnalytics(); void loadFilteredData(); }} disabled={loading || rangeLoading} aria-label="Refresh analytics" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50"><RefreshCw className={`w-4 h-4 ${loading || rangeLoading ? 'animate-spin' : ''}`} /></button>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-indigo-700">Traffic & activity</p><h2 id="analytics-title" className="mt-1 text-xl sm:text-2xl font-bold text-slate-900">Dashboard overview</h2><p className="mt-1 text-xs text-slate-500">Website opens, searches and matches: {selectedRangeLabel.toLowerCase()}.</p></div>
+        <div className="flex items-center gap-2">
+          <label className="flex h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-600 shadow-sm">Time period
+            <select aria-label="Analytics time period" value={timeRange} onChange={(event) => { setTimeRange(event.target.value as TimeRange); setPage(0); }} className="max-w-36 bg-transparent text-sm font-semibold text-slate-800 outline-none">
+              {TIME_RANGES.map((range) => <option key={range.value} value={range.value}>{range.label}</option>)}
+            </select>
+          </label>
+          <button onClick={() => { void loadAnalytics(); void loadFilteredData(); }} disabled={loading || rangeLoading} aria-label="Refresh analytics" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50"><RefreshCw className={`w-4 h-4 ${loading || rangeLoading ? 'animate-spin' : ''}`} /></button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
@@ -152,11 +159,6 @@ export function AdminAnalytics() {
         <div className="rounded-2xl border border-indigo-200 bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div><h3 className="font-semibold text-slate-900">Recent searches</h3><p className="mt-0.5 text-xs text-slate-500">{numberFormat.format(totalRecentSearches)} searches in the selected period, newest first</p></div>
-            <label className="flex items-center gap-2 text-xs font-medium text-slate-600">Time range
-              <select value={timeRange} onChange={(event) => { setTimeRange(event.target.value as TimeRange); setPage(0); }} className="rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                {TIME_RANGES.map((range) => <option key={range.value} value={range.value}>{range.label}</option>)}
-              </select>
-            </label>
           </div>
           {rangeError ? <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-4 text-center text-sm text-rose-700">{rangeError}<button type="button" onClick={() => void loadFilteredData()} className="ml-2 font-semibold underline">Retry</button></div> : rangeLoading ? <div className="flex items-center justify-center py-10"><span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-indigo-600" /></div> : recentSearches.length ? <>
             <div className="mt-3 divide-y divide-slate-100">{recentSearches.map((item, index) => <div key={`${item.identifier}-${item.created_at}-${index}`} className="flex items-center justify-between gap-3 py-2.5"><div className="min-w-0"><p className="truncate font-mono text-sm font-medium text-slate-800">{item.identifier}</p><p className="text-[11px] text-slate-500">{item.search_source.toUpperCase()} · {dateFormat.format(new Date(item.created_at))}</p></div><span className={`shrink-0 rounded-lg px-2 py-1 text-[11px] font-semibold ${item.result === 'found' ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'}`}>{item.result === 'found' ? 'Fraud match' : 'No match'}</span></div>)}</div>

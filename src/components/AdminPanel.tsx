@@ -1,14 +1,10 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import {
-  Check,
-  X,
-  Clock,
-  Phone,
-  CreditCard,
-  AlertCircle,
-  LogOut,
-  Shield,
+  AlertCircle, ArrowDownWideNarrow, Check, ChevronLeft, ChevronRight, Clock,
+  CreditCard, FileCheck2, FileClock, Filter, LayoutDashboard, LogOut, Phone,
+  RefreshCw, Search, Shield, X,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import {
   supabase,
   FRAUD_TYPE_LABELS,
@@ -21,6 +17,9 @@ import { AdminAnalytics } from './AdminAnalytics';
 import { ContactInbox } from './ContactInbox';
 
 const ADMIN_REVIEWER = 'admin';
+const REPORTS_PER_PAGE = 8;
+type DashboardSection = 'overview' | 'reports' | 'messages';
+type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected';
 
 export function AdminPanel() {
   const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem(ADMIN_SESSION_KEY) === '1');
@@ -31,53 +30,74 @@ export function AdminPanel() {
     setUnlocked(false);
   }, []);
 
-  if (!unlocked) {
-    return <AdminAuth onSuccess={() => setUnlocked(true)} />;
-  }
-
+  if (!unlocked) return <AdminAuth onSuccess={() => setUnlocked(true)} />;
   return <AdminDashboard onLock={handleLock} />;
 }
 
 function AdminDashboard({ onLock }: { onLock: () => void }) {
-  const [pending, setPending] = useState<FraudReport[]>([]);
-  const [reviewed, setReviewed] = useState<FraudReport[]>([]);
+  const [reports, setReports] = useState<FraudReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [action, setAction] = useState<string | null>(null);
   const [error, setError] = useState('');
-  const [tab, setTab] = useState<'pending' | 'reviewed'>('pending');
+  const [section, setSection] = useState<DashboardSection>('overview');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('pending');
+  const [fraudTypeFilter, setFraudTypeFilter] = useState('all');
+  const [query, setQuery] = useState('');
+  const [sortOldestFirst, setSortOldestFirst] = useState(false);
+  const [page, setPage] = useState(0);
 
   const loadReports = useCallback(async () => {
-    const [{ data: pendingData, error: pendingError }, { data: reviewedData, error: reviewedError }] = await Promise.all([
-      supabase.from('fraud_reports').select('*').eq('status', 'pending').order('created_at', { ascending: false }),
-      supabase
-        .from('fraud_reports')
-        .select('*')
-        .in('status', ['approved', 'rejected'])
-        .order('updated_at', { ascending: false }),
-    ]);
-    if (pendingError || reviewedError) {
-      setError('Could not load reports. Sign in with an authorized admin account and try again.');
+    setLoading(true);
+    const { data, error: requestError } = await supabase
+      .from('fraud_reports')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (requestError) {
+      setError('Could not load fraud reports. Sign in with an authorized admin account and try again.');
     } else {
+      setReports((data ?? []) as FraudReport[]);
       setError('');
     }
-    setPending((pendingData ?? []) as FraudReport[]);
-    setReviewed((reviewedData ?? []) as FraudReport[]);
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    loadReports();
-  }, [loadReports]);
+  useEffect(() => { void loadReports(); }, [loadReports]);
 
-  const handleApprove = async (id: string) => {
+  const counts = useMemo(() => ({
+    all: reports.length,
+    pending: reports.filter((report) => report.status === 'pending').length,
+    approved: reports.filter((report) => report.status === 'approved').length,
+    rejected: reports.filter((report) => report.status === 'rejected').length,
+  }), [reports]);
+
+  const filteredReports = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return reports
+      .filter((report) => statusFilter === 'all' || report.status === statusFilter)
+      .filter((report) => fraudTypeFilter === 'all' || report.fraud_type === fraudTypeFilter)
+      .filter((report) => !normalizedQuery || [report.identifier, report.description, report.reporter_name ?? ''].some((value) => value.toLowerCase().includes(normalizedQuery)))
+      .sort((a, b) => sortOldestFirst
+        ? new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        : new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }, [reports, statusFilter, fraudTypeFilter, query, sortOldestFirst]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredReports.length / REPORTS_PER_PAGE));
+  const visibleReports = filteredReports.slice(page * REPORTS_PER_PAGE, (page + 1) * REPORTS_PER_PAGE);
+
+  const changeFilter = (filter: StatusFilter) => {
+    setStatusFilter(filter);
+    setPage(0);
+  };
+
+  const review = async (id: string, decision: 'approve' | 'reject') => {
     setAction(id);
     setError('');
-    const { error } = await supabase.rpc('approve_fraud_report', {
+    const { error: actionError } = await supabase.rpc(decision === 'approve' ? 'approve_fraud_report' : 'reject_fraud_report', {
       p_report_id: id,
       p_admin_email: ADMIN_REVIEWER,
     });
-    if (error) {
-      setError('Could not approve report. Please try again.');
+    if (actionError) {
+      setError(`Could not ${decision} this report. Please try again.`);
       setAction(null);
       return;
     }
@@ -85,204 +105,90 @@ function AdminDashboard({ onLock }: { onLock: () => void }) {
     setAction(null);
   };
 
-  const handleReject = async (id: string) => {
-    setAction(id);
-    setError('');
-    const { error } = await supabase.rpc('reject_fraud_report', {
-      p_report_id: id,
-      p_admin_email: ADMIN_REVIEWER,
-    });
-    if (error) {
-      setError('Could not reject report. Please try again.');
-      setAction(null);
-      return;
-    }
-    await loadReports();
-    setAction(null);
-  };
-
-  const reports = tab === 'pending' ? pending : reviewed;
+  const navItems: { id: DashboardSection; label: string; icon: typeof LayoutDashboard; count?: number }[] = [
+    { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+    { id: 'reports', label: 'Fraud reports', icon: FileCheck2, count: counts.pending },
+    { id: 'messages', label: 'Contact inbox', icon: Clock },
+  ];
 
   return (
-    <div className="animate-fade-in">
-      {/* Admin header bar */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 mb-5 sm:mb-6 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center flex-shrink-0 shadow-md shadow-slate-900/20">
-            <Shield className="w-5 h-5 text-white" />
+    <div className="min-w-0 space-y-6 pb-10">
+      <header className="overflow-hidden rounded-3xl bg-slate-950 text-white shadow-lg shadow-slate-900/10">
+        <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-5 sm:px-7 sm:py-6">
+          <div className="flex items-center gap-3.5">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-400 text-slate-950"><Shield className="h-6 w-6" /></div>
+            <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">Trust & Safety</p><h1 className="mt-0.5 text-xl font-bold sm:text-2xl">Admin workspace</h1><p className="mt-1 text-xs text-slate-400">Review reports, monitor searches and respond to users.</p></div>
           </div>
-          <div className="min-w-0">
-            <p className="text-sm sm:text-base font-semibold text-slate-800 truncate">Admin Panel</p>
-            <p className="text-xs text-slate-400">Review community fraud reports</p>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => void loadReports()} disabled={loading} className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/15 px-3 text-sm font-semibold text-slate-200 hover:bg-white/10 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /><span className="hidden sm:inline">Refresh</span></button>
+            <button type="button" onClick={onLock} className="inline-flex h-10 items-center gap-2 rounded-xl bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-100"><LogOut className="h-4 w-4" /><span className="hidden sm:inline">Sign out</span></button>
           </div>
         </div>
-        <button
-          onClick={onLock}
-          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-2 rounded-xl transition-colors flex-shrink-0"
-        >
-          <LogOut className="w-4 h-4" />
-          <span className="hidden sm:inline">Lock</span>
-        </button>
-      </div>
+        <nav className="flex gap-1 overflow-x-auto border-t border-white/10 px-3 py-2 sm:px-5" aria-label="Admin sections">
+          {navItems.map(({ id, label, icon: Icon, count }) => <button key={id} type="button" onClick={() => setSection(id)} className={`inline-flex shrink-0 items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition-colors ${section === id ? 'bg-white text-slate-950' : 'text-slate-300 hover:bg-white/10 hover:text-white'}`}><Icon className="h-4 w-4" />{label}{count !== undefined && <span className={`rounded-full px-2 py-0.5 text-[11px] ${section === id ? 'bg-amber-100 text-amber-900' : 'bg-white/10 text-white'}`}>{count}</span>}</button>)}
+        </nav>
+      </header>
 
-      {error && (
-        <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-100 rounded-xl p-3.5 mb-4">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />
-          <p className="text-sm">{error}</p>
-        </div>
-      )}
+      {error && <div role="alert" className="flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"><AlertCircle className="h-4 w-4 shrink-0" />{error}</div>}
 
-      <AdminAnalytics />
-      <ContactInbox />
+      {section === 'overview' && <>
+        <section className="grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label="Report status summary">
+          <SummaryCard label="Awaiting review" value={counts.pending} icon={FileClock} tone="amber" onClick={() => { changeFilter('pending'); setSection('reports'); }} />
+          <SummaryCard label="Approved" value={counts.approved} icon={Check} tone="emerald" onClick={() => { changeFilter('approved'); setSection('reports'); }} />
+          <SummaryCard label="Rejected" value={counts.rejected} icon={X} tone="rose" onClick={() => { changeFilter('rejected'); setSection('reports'); }} />
+          <SummaryCard label="All reports" value={counts.all} icon={FileCheck2} tone="indigo" onClick={() => { changeFilter('all'); setSection('reports'); }} />
+        </section>
+        <AdminAnalytics />
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wider text-indigo-700">Action needed</p><h2 className="mt-1 text-lg font-bold text-slate-900">Reports awaiting review</h2></div><button type="button" onClick={() => { changeFilter('pending'); setSection('reports'); }} className="rounded-xl border border-slate-300 px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">View review queue <ChevronRight className="ml-1 inline h-4 w-4" /></button></div>
+          {loading ? <LoadingState /> : counts.pending === 0 ? <EmptyState text="You’re all caught up. No reports need review." /> : <div className="grid gap-3 lg:grid-cols-2">{reports.filter((report) => report.status === 'pending').slice(0, 4).map((report) => <ReportCard key={report.id} report={report} onReview={review} isActioning={action === report.id} compact />)}</div>}
+        </section>
+      </>}
 
-      {/* Tabs */}
-      <div className="flex gap-2 mb-4 p-1 bg-slate-100/80 rounded-xl">
-        <button
-          onClick={() => setTab('pending')}
-          className={`flex-1 px-3 sm:px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
-            tab === 'pending'
-              ? 'bg-white text-amber-700 shadow-sm'
-              : 'text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          Pending
-          <span className="ml-1.5 tabular-nums opacity-80">({pending.length})</span>
-        </button>
-        <button
-          onClick={() => setTab('reviewed')}
-          className={`flex-1 px-3 sm:px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
-            tab === 'reviewed'
-              ? 'bg-white text-slate-700 shadow-sm'
-              : 'text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          Reviewed
-          <span className="ml-1.5 tabular-nums opacity-80">({reviewed.length})</span>
-        </button>
-      </div>
+      {section === 'reports' && <section className="space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div><p className="text-xs font-bold uppercase tracking-wider text-indigo-700">Moderation</p><h2 className="mt-1 text-2xl font-bold text-slate-950">Fraud report queue</h2><p className="mt-1 text-sm text-slate-500">Search, filter, review evidence, then approve or reject each report.</p></div>
+          <span className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600">{numberFormat.format(filteredReports.length)} results</span>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-3 sm:p-4">
+          <div className="grid gap-3 lg:grid-cols-[1fr_auto_auto]">
+            <label className="relative block"><span className="sr-only">Search reports</span><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(0); }} placeholder="Search phone, UPI ID, description or reporter" className="h-11 w-full rounded-xl border border-slate-300 pl-9 pr-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" /></label>
+            <label className="flex h-11 items-center gap-2 rounded-xl border border-slate-300 px-3 text-sm text-slate-500"><Filter className="h-4 w-4" /><select aria-label="Filter by fraud type" value={fraudTypeFilter} onChange={(event) => { setFraudTypeFilter(event.target.value); setPage(0); }} className="min-w-28 bg-transparent font-medium text-slate-700 outline-none"><option value="all">All types</option>{Object.entries(FRAUD_TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+            <button type="button" onClick={() => setSortOldestFirst((current) => !current)} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"><ArrowDownWideNarrow className="h-4 w-4" />{sortOldestFirst ? 'Oldest first' : 'Newest first'}</button>
+          </div>
+          <div className="mt-4 flex gap-2 overflow-x-auto border-b border-slate-100 pb-2">{(['pending', 'approved', 'rejected', 'all'] as StatusFilter[]).map((filter) => <button key={filter} type="button" onClick={() => changeFilter(filter)} className={`shrink-0 rounded-xl px-3 py-2 text-sm font-semibold capitalize ${statusFilter === filter ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>{filter === 'all' ? 'All reports' : filter}<span className={`ml-2 rounded-full px-1.5 py-0.5 text-xs ${statusFilter === filter ? 'bg-white/15' : 'bg-slate-200/70'}`}>{counts[filter]}</span></button>)}</div>
+        </div>
+        {loading ? <LoadingState /> : visibleReports.length === 0 ? <EmptyState text="No reports match these filters." /> : <div className="grid gap-3 xl:grid-cols-2">{visibleReports.map((report) => <ReportCard key={report.id} report={report} onReview={review} isActioning={action === report.id} />)}</div>}
+        {!loading && filteredReports.length > 0 && <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3"><span className="text-xs text-slate-500">Showing {page * REPORTS_PER_PAGE + 1}–{Math.min((page + 1) * REPORTS_PER_PAGE, filteredReports.length)} of {filteredReports.length}</span><div className="flex gap-2"><button type="button" onClick={() => setPage((current) => Math.max(0, current - 1))} disabled={page === 0} className="grid h-9 w-9 place-items-center rounded-lg border border-slate-300 text-slate-700 disabled:opacity-40" aria-label="Previous page"><ChevronLeft className="h-4 w-4" /></button><span className="grid min-w-10 place-items-center text-sm font-semibold text-slate-700">{page + 1}/{pageCount}</span><button type="button" onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))} disabled={page + 1 >= pageCount} className="grid h-9 w-9 place-items-center rounded-lg border border-slate-300 text-slate-700 disabled:opacity-40" aria-label="Next page"><ChevronRight className="h-4 w-4" /></button></div></div>}
+      </section>}
 
-      {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <span className="w-6 h-6 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
-        </div>
-      ) : reports.length === 0 ? (
-        <div className="bg-white border border-slate-200 rounded-2xl p-10 sm:p-12 text-center">
-          <Clock className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-          <p className="text-slate-500 text-sm sm:text-base">
-            {tab === 'pending' ? 'No pending reports to review.' : 'No reviewed reports yet.'}
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-3 sm:space-y-4">
-          {reports.map((report) => (
-            <AdminReportCard
-              key={report.id}
-              report={report}
-              onApprove={handleApprove}
-              onReject={handleReject}
-              isActioning={action === report.id}
-            />
-          ))}
-        </div>
-      )}
+      {section === 'messages' && <div><div className="mb-4"><p className="text-xs font-bold uppercase tracking-wider text-emerald-700">Support</p><h2 className="mt-1 text-2xl font-bold text-slate-950">Contact inbox</h2><p className="mt-1 text-sm text-slate-500">Read user messages and follow up directly.</p></div><ContactInbox /></div>}
     </div>
   );
 }
 
-function AdminReportCard({
-  report,
-  onApprove,
-  onReject,
-  isActioning,
-}: {
-  report: FraudReport;
-  onApprove: (id: string) => void;
-  onReject: (id: string) => void;
-  isActioning: boolean;
-}) {
-  return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm shadow-slate-900/[0.02]">
-      <div className="flex flex-wrap items-center gap-2 mb-3 sm:mb-4">
-        <div className="flex items-center gap-2 bg-slate-100 rounded-lg px-3 py-1.5 max-w-full">
-          {report.identifier_type === 'phone' ? (
-            <Phone className="w-4 h-4 text-slate-500 flex-shrink-0" />
-          ) : (
-            <CreditCard className="w-4 h-4 text-slate-500 flex-shrink-0" />
-          )}
-          <span className="font-mono font-semibold text-slate-800 text-sm truncate">{report.identifier}</span>
-        </div>
-        <span className={`px-2.5 py-1 rounded-md text-xs font-semibold border ${FRAUD_TYPE_COLORS[report.fraud_type]}`}>
-          {FRAUD_TYPE_LABELS[report.fraud_type]}
-        </span>
-        <span className={`px-2.5 py-1 rounded-md text-xs font-semibold border ${STATUS_COLORS[report.status]}`}>
-          {report.status === 'pending' ? 'Pending' : report.status === 'approved' ? 'Approved' : 'Rejected'}
-        </span>
-      </div>
-
-      <p className="text-slate-700 text-sm mb-3 leading-relaxed">{report.description}</p>
-
-      <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-slate-400 mb-3">
-        <span>
-          Submitted{' '}
-          {new Date(report.created_at).toLocaleDateString('en-IN', {
-            day: 'numeric',
-            month: 'short',
-            year: 'numeric',
-          })}
-        </span>
-        {report.amount_lost !== null && Number(report.amount_lost) > 0 && (
-          <span>Amount lost: ₹{Number(report.amount_lost).toLocaleString('en-IN')}</span>
-        )}
-        {report.reporter_name && <span>By: {report.reporter_name}</span>}
-        {report.status !== 'pending' && report.reviewed_by && (
-          <span>
-            Reviewed by {report.reviewed_by} on{' '}
-            {report.reviewed_at
-              ? new Date(report.reviewed_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
-              : ''}
-          </span>
-        )}
-      </div>
-
-      {report.screenshot_urls && report.screenshot_urls.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-4">
-          {report.screenshot_urls.map((url, i) => (
-            <a
-              key={i}
-              href={url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border border-slate-200 hover:border-slate-400 transition-colors"
-            >
-              <img src={url} alt={`Evidence ${i + 1}`} className="w-full h-full object-cover" />
-            </a>
-          ))}
-        </div>
-      )}
-
-      {report.status === 'pending' && (
-        <div className="flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3">
-          <button
-            onClick={() => onReject(report.id)}
-            disabled={isActioning}
-            className="flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-3 sm:py-2.5 rounded-xl bg-white border border-slate-300 text-slate-600 text-sm font-medium hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.98]"
-          >
-            <X className="w-4 h-4" />
-            Reject
-          </button>
-          <button
-            onClick={() => onApprove(report.id)}
-            disabled={isActioning}
-            className="flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-3 sm:py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.98] shadow-sm shadow-emerald-600/20"
-          >
-            <Check className="w-4 h-4" />
-            Approve
-          </button>
-          {isActioning && (
-            <span className="w-5 h-5 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin self-center mx-auto sm:mx-0" />
-          )}
-        </div>
-      )}
-    </div>
-  );
+function SummaryCard({ label, value, icon: Icon, tone, onClick }: { label: string; value: number; icon: LucideIcon; tone: 'amber' | 'emerald' | 'rose' | 'indigo'; onClick: () => void }) {
+  const tones = { amber: 'text-amber-700 bg-amber-50 border-amber-200', emerald: 'text-emerald-700 bg-emerald-50 border-emerald-200', rose: 'text-rose-700 bg-rose-50 border-rose-200', indigo: 'text-indigo-700 bg-indigo-50 border-indigo-200' };
+  return <button type="button" onClick={onClick} className={`rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${tones[tone].split(' ').pop()}`}><span className={`inline-flex h-9 w-9 items-center justify-center rounded-xl ${tones[tone].split(' ').slice(0, 2).join(' ')}`}><Icon className="h-4 w-4" /></span><span className="mt-3 block text-2xl font-bold tabular-nums text-slate-950">{numberFormat.format(value)}</span><span className="mt-0.5 block text-xs font-medium text-slate-500">{label}</span></button>;
 }
+
+function ReportCard({ report, onReview, isActioning, compact = false }: { report: FraudReport; onReview: (id: string, decision: 'approve' | 'reject') => void; isActioning: boolean; compact?: boolean }) {
+  return <article className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300">
+    <div className="flex flex-wrap items-start justify-between gap-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <span className="inline-flex max-w-full items-center gap-2 rounded-lg bg-slate-100 px-2.5 py-1.5 font-mono text-sm font-semibold text-slate-800">{report.identifier_type === 'phone' ? <Phone className="h-4 w-4 shrink-0 text-slate-500" /> : <CreditCard className="h-4 w-4 shrink-0 text-slate-500" />}<span className="break-all">{report.identifier}</span></span>
+        <span className={`rounded-lg border px-2 py-1 text-[11px] font-semibold ${FRAUD_TYPE_COLORS[report.fraud_type]}`}>{FRAUD_TYPE_LABELS[report.fraud_type]}</span>
+      </div>
+      <span className={`rounded-lg border px-2 py-1 text-[11px] font-semibold ${STATUS_COLORS[report.status]}`}>{report.status}</span>
+    </div>
+    <p className={`mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700 ${compact ? 'line-clamp-3' : ''}`}>{report.description}</p>
+    <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500"><span>{new Date(report.created_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</span>{report.reporter_name && <span>From {report.reporter_name}</span>}{report.amount_lost !== null && Number(report.amount_lost) > 0 && <span className="font-semibold text-slate-700">Loss ₹{Number(report.amount_lost).toLocaleString('en-IN')}</span>}</div>
+    {report.screenshot_urls?.length ? <div className="mt-3 flex flex-wrap gap-2">{report.screenshot_urls.map((url, index) => <a key={`${report.id}-${index}`} href={url} target="_blank" rel="noopener noreferrer" className="block h-14 w-14 overflow-hidden rounded-lg border border-slate-200 hover:border-indigo-400"><img src={url} alt={`Evidence ${index + 1}`} className="h-full w-full object-cover" /></a>)}<span className="self-center text-xs text-slate-500">Evidence</span></div> : <p className="mt-3 text-xs text-slate-400">No evidence attached</p>}
+    {report.status === 'pending' && <div className="mt-4 flex gap-2 border-t border-slate-100 pt-3"><button type="button" onClick={() => onReview(report.id, 'reject')} disabled={isActioning} className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50"><X className="h-4 w-4" />Reject</button><button type="button" onClick={() => onReview(report.id, 'approve')} disabled={isActioning} className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">{isActioning ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}Approve</button></div>}
+    {report.status !== 'pending' && report.reviewed_at && <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-400">Reviewed {new Date(report.reviewed_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}{report.reviewed_by ? ` · ${report.reviewed_by}` : ''}</p>}
+  </article>;
+}
+
+function LoadingState() { return <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white py-16"><span className="h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-indigo-600" /></div>; }
+function EmptyState({ text }: { text: string }) { return <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-12 text-center"><div className="mx-auto grid h-11 w-11 place-items-center rounded-2xl bg-slate-100 text-slate-400"><Check className="h-5 w-5" /></div><p className="mt-3 text-sm font-medium text-slate-600">{text}</p></div>; }
+const numberFormat = new Intl.NumberFormat('en-IN');

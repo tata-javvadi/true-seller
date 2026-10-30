@@ -1,31 +1,31 @@
-import { AlertTriangle, Phone, CreditCard, Calendar, Users, TrendingDown, X } from 'lucide-react';
+import { AlertTriangle, Phone, CreditCard, Calendar, Users, TrendingDown } from 'lucide-react';
 import { FRAUD_TYPE_LABELS, FRAUD_TYPE_COLORS, type FraudReport } from '@/lib/supabase';
 
 export function ResultCard({ report }: { report: FraudReport }) {
   return (
-    <div className="bg-white border-2 border-red-300 rounded-2xl overflow-hidden shadow-xl shadow-red-200/50 animate-[fadeIn_0.4s_ease]">
+    <div className="w-full min-w-0 max-w-full bg-white border border-red-200 rounded-2xl overflow-hidden shadow-sm animate-[fadeIn_0.4s_ease]">
       {/* Warning header */}
-      <div className="bg-gradient-to-r from-red-600 to-red-500 px-6 py-5 flex items-center gap-4">
-        <div className="flex-shrink-0 w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
-          <AlertTriangle className="w-7 h-7 text-white" />
+      <div className="bg-gradient-to-r from-red-600 to-red-500 px-4 sm:px-5 py-3.5 flex items-center gap-3">
+        <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+          <AlertTriangle className="w-5 h-5 text-white" />
         </div>
         <div>
-          <h3 className="text-xl font-bold text-white">Fraud Warning</h3>
-          <p className="text-red-100 text-sm">This seller has been reported for fraudulent activity</p>
+          <h3 className="text-lg font-bold text-white">Fraud Warning</h3>
+          <p className="text-red-100 text-xs sm:text-sm">This seller has been reported for fraudulent activity</p>
         </div>
       </div>
 
       {/* Body */}
-      <div className="p-6">
+      <div className="p-4 sm:p-5">
         {/* Identifier info */}
-        <div className="flex flex-wrap gap-3 mb-5">
-          <div className="flex items-center gap-2 bg-slate-100 rounded-lg px-4 py-2">
+        <div className="flex flex-wrap items-center gap-2 mb-4 min-w-0">
+          <div className="flex items-center gap-2 bg-slate-100 rounded-lg px-3 py-2 min-w-0 max-w-full">
             {report.identifier_type === 'phone' ? (
               <Phone className="w-4 h-4 text-slate-500" />
             ) : (
               <CreditCard className="w-4 h-4 text-slate-500" />
             )}
-            <span className="font-mono font-semibold text-slate-800">{report.identifier}</span>
+            <span className="font-mono font-semibold text-slate-800 text-sm break-all">{report.identifier}</span>
           </div>
           <span className={`px-3 py-2 rounded-lg text-sm font-semibold border ${FRAUD_TYPE_COLORS[report.fraud_type]}`}>
             {FRAUD_TYPE_LABELS[report.fraud_type]}
@@ -33,37 +33,13 @@ export function ResultCard({ report }: { report: FraudReport }) {
         </div>
 
         {/* Description */}
-        <div className="mb-5">
+        <div className="mb-4">
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Reported Activity</p>
           <p className="text-slate-700 leading-relaxed">{report.description}</p>
         </div>
 
-        {/* Screenshots */}
-        {report.screenshot_urls && report.screenshot_urls.length > 0 && (
-          <div className="mb-5">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Evidence Screenshots</p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {report.screenshot_urls.map((url, i) => (
-                <a
-                  key={i}
-                  href={url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block aspect-square rounded-lg overflow-hidden border border-slate-200 hover:border-emerald-400 transition-colors group"
-                >
-                  <img
-                    src={url}
-                    alt={`Screenshot ${i + 1}`}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                </a>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Stats grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <StatCard
             icon={<Users className="w-4 h-4 text-red-500" />}
             label="Reports"
@@ -116,7 +92,7 @@ function StatCard({ icon, label, value, bg }: { icon: React.ReactNode; label: st
         {icon}
         <span className="text-xs text-slate-500 font-medium">{label}</span>
       </div>
-      <p className="font-bold text-slate-800 text-sm">{value}</p>
+      <p className="font-bold text-slate-800 text-sm break-words">{value}</p>
     </div>
   );
 }

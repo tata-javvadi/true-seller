@@ -1,58 +1,18 @@
 import { useState, useCallback, useRef } from 'react';
-import jsQR from 'jsqr';
 import { Search, ImageUp, Camera } from 'lucide-react';
 import { supabase, validateIdentifier, detectType, type FraudReport } from '@/lib/supabase';
+import { decodeQrImage, extractUpiId } from '@/lib/upiQr';
 import { ResultCard } from './ResultCard';
 
 type SearchState = 'idle' | 'searching' | 'found' | 'safe' | 'error';
 type SearchMode = 'phone' | 'upi' | 'qr';
-
-function extractUpiId(payload: string): string | null {
-  const decoded = (() => {
-    try { return decodeURIComponent(payload); } catch { return payload; }
-  })();
-  const params = decoded.includes('?') ? new URLSearchParams(decoded.slice(decoded.indexOf('?') + 1)) : null;
-  const address = params?.get('pa') ?? params?.get('vpa');
-  if (address && /^[\w.-]{2,256}@[\w.-]{2,64}$/.test(address.trim())) return address.trim();
-  return decoded.match(/[\w.-]{2,256}@[\w.-]{2,64}/)?.[0] ?? null;
-}
-
-async function decodeQrImage(file: File): Promise<string | null> {
-  let bitmap: ImageBitmap | null = null;
-  let image: HTMLImageElement | null = null;
-  let objectUrl: string | null = null;
-  try {
-    if (typeof createImageBitmap === 'function') {
-      bitmap = await createImageBitmap(file);
-    } else {
-      objectUrl = URL.createObjectURL(file);
-      image = new Image();
-      image.src = objectUrl;
-      await image.decode();
-    }
-    const source = bitmap ?? image;
-    if (!source) return null;
-    const scale = Math.min(1, 1800 / Math.max(source.width, source.height));
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.round(source.width * scale);
-    canvas.height = Math.round(source.height * scale);
-    const context = canvas.getContext('2d', { willReadFrequently: true });
-    if (!context) return null;
-    context.drawImage(source, 0, 0, canvas.width, canvas.height);
-    const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
-    return jsQR(pixels.data, pixels.width, pixels.height, { inversionAttempts: 'attemptBoth' })?.data ?? null;
-  } finally {
-    bitmap?.close();
-    if (objectUrl) URL.revokeObjectURL(objectUrl);
-  }
-}
 
 export function SearchForm() {
   const [mode, setMode] = useState<SearchMode>('phone');
   const [query, setQuery] = useState('');
   const [validationError, setValidationError] = useState('');
   const [state, setState] = useState<SearchState>('idle');
-  const [result, setResult] = useState<FraudReport | null>(null);
+  const [results, setResults] = useState<FraudReport[]>([]);
   const [searchedIdentifier, setSearchedIdentifier] = useState('');
   const [qrError, setQrError] = useState('');
   const [decodingQr, setDecodingQr] = useState(false);
@@ -64,13 +24,13 @@ export function SearchForm() {
     if (!checked.ok) {
       setValidationError(checked.error);
       setState('idle');
-      setResult(null);
+      setResults([]);
       return;
     }
 
     setValidationError('');
     setState('searching');
-    setResult(null);
+    setResults([]);
     setSearchedIdentifier(checked.value);
 
     try {
@@ -78,7 +38,8 @@ export function SearchForm() {
         .from('fraud_reports')
         .select('*')
         .eq('identifier', checked.value)
-        .maybeSingle();
+        .eq('status', 'approved')
+        .order('created_at', { ascending: false });
 
       if (error) {
         setState('error');
@@ -89,13 +50,13 @@ export function SearchForm() {
         identifier: checked.value,
         identifier_type: detectType(checked.value),
         search_source: source,
-        result: data ? 'found' : 'not_found',
-        matched_report_id: data?.id ?? null,
+        result: data?.length ? 'found' : 'not_found',
+        matched_report_id: data?.[0]?.id ?? null,
       });
       if (logError) console.error('Could not log search:', logError);
 
-      if (data) {
-        setResult(data as FraudReport);
+      if (data?.length) {
+        setResults(data as FraudReport[]);
         setState('found');
       } else {
         setState('safe');
@@ -117,7 +78,7 @@ export function SearchForm() {
     setValidationError('');
     setQrError('');
     setState('idle');
-    setResult(null);
+    setResults([]);
   };
 
   const handleQrFile = async (file?: File) => {
@@ -218,7 +179,7 @@ export function SearchForm() {
       </form>
 
       <div className="tsc-result">
-        {state === 'found' && result && <ResultCard report={result} />}
+        {state === 'found' && <div className="w-full min-w-0 space-y-3">{results.map((report) => <ResultCard key={report.id} report={report} />)}</div>}
 
         {state === 'safe' && (
           <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 text-center animate-[fadeIn_0.4s_ease]">

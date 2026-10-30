@@ -1,8 +1,10 @@
 import { useState, useRef } from 'react';
 import { Check, AlertCircle, UploadCloud, X } from 'lucide-react';
 import { supabase, validateIdentifier, FRAUD_TYPE_LABELS, type FraudType } from '@/lib/supabase';
+import { decodeQrImage, extractUpiId } from '@/lib/upiQr';
 
 type SubmitState = 'idle' | 'submitting' | 'success' | 'error';
+type IdentifierMode = 'phone' | 'upi' | 'qr';
 
 const FRAUD_TYPES: FraudType[] = ['fake_product', 'payment_scam', 'phishing', 'impersonation', 'other'];
 const MAX_FILES = 5;
@@ -11,6 +13,7 @@ const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
 
 export function ReportForm() {
   const [open, setOpen] = useState(false);
+  const [identifierMode, setIdentifierMode] = useState<IdentifierMode>('phone');
   const [identifier, setIdentifier] = useState('');
   const [reporterName, setReporterName] = useState('');
   const [description, setDescription] = useState('');
@@ -18,10 +21,48 @@ export function ReportForm() {
   const [fraudType, setFraudType] = useState<FraudType>('payment_scam');
   const [files, setFiles] = useState<File[]>([]);
   const [uploadError, setUploadError] = useState('');
+  const [decodingQr, setDecodingQr] = useState(false);
   const [identifierError, setIdentifierError] = useState('');
   const [state, setState] = useState<SubmitState>('idle');
   const [errorMsg, setErrorMsg] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const qrInputRef = useRef<HTMLInputElement>(null);
+
+  const handleQrChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploadError('');
+    if (!file.type.startsWith('image/')) {
+      setUploadError('Choose an image of the fraud QR code.');
+      return;
+    }
+    if (file.size > MAX_SIZE_BYTES) {
+      setUploadError(`The QR image must be under ${MAX_SIZE_MB}MB.`);
+      return;
+    }
+    setDecodingQr(true);
+    try {
+      const payload = await decodeQrImage(file);
+      const upiId = payload ? extractUpiId(payload) : null;
+      const checked = upiId ? validateIdentifier(upiId, 'upi') : null;
+      if (!checked?.ok) {
+        setUploadError(payload ? 'This QR code does not contain a valid UPI ID.' : 'Could not read a QR code from this image. Try a clearer image.');
+        return;
+      }
+      if (files.length >= MAX_FILES) {
+        setUploadError(`The QR image was read, but you can attach up to ${MAX_FILES} images total. Remove an image to attach this QR as evidence.`);
+        return;
+      }
+      setIdentifier(checked.value);
+      setIdentifierError('');
+      setFiles((current) => [...current, file]);
+    } catch {
+      setUploadError('Could not open this image. Please choose a JPG or PNG QR image.');
+    } finally {
+      setDecodingQr(false);
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setUploadError('');
@@ -54,7 +95,7 @@ export function ReportForm() {
     e.preventDefault();
     if (!description.trim()) return;
 
-    const checked = validateIdentifier(identifier);
+    const checked = validateIdentifier(identifier, identifierMode === 'qr' ? 'upi' : identifierMode);
     if (!checked.ok) {
       setIdentifierError(checked.error);
       return;
@@ -112,6 +153,7 @@ export function ReportForm() {
       setDescription('');
       setAmountLost('');
       setFraudType('payment_scam');
+      setIdentifierMode('phone');
       setFiles([]);
     } catch (error) {
       console.error('Unexpected fraud report submission error:', error);
@@ -169,10 +211,22 @@ export function ReportForm() {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Identifier */}
+              {/* Choose identifier type */}
               <div>
+                <label htmlFor="identifier-mode" className="block text-sm font-medium text-slate-600 mb-1.5">
+                  Report using <span className="text-red-500">*</span>
+                </label>
+                <select id="identifier-mode" value={identifierMode} onChange={(e) => { setIdentifierMode(e.target.value as IdentifierMode); setIdentifier(''); setIdentifierError(''); setUploadError(''); }} className="w-full min-h-12 px-4 py-3 rounded-xl border border-slate-300 text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all">
+                  <option value="phone">Phone Number</option>
+                  <option value="upi">UPI</option>
+                  <option value="qr">QR</option>
+                </select>
+              </div>
+
+              {/* Identifier */}
+              {identifierMode !== 'qr' && <div>
                 <label className="block text-sm font-medium text-slate-600 mb-1.5">
-                  Seller's Phone or UPI ID <span className="text-red-500">*</span>
+                  {identifierMode === 'phone' ? 'Seller’s Phone Number' : 'Seller’s UPI ID'} <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -181,7 +235,7 @@ export function ReportForm() {
                     setIdentifier(e.target.value);
                     if (identifierError) setIdentifierError('');
                   }}
-                  placeholder="e.g. 9876543210, +91…, or seller@okaxis"
+                  placeholder={identifierMode === 'phone' ? 'e.g. 9876543210 or +91…' : 'e.g. seller@okaxis'}
                   required
                   aria-invalid={!!identifierError}
                   aria-describedby={identifierError ? 'report-identifier-error' : undefined}
@@ -196,7 +250,7 @@ export function ReportForm() {
                     {identifierError}
                   </p>
                 )}
-              </div>
+              </div>}
 
               {/* Fraud type */}
               <div>
@@ -256,10 +310,19 @@ export function ReportForm() {
                 </div>
               </div>
 
+              {/* QR upload */}
+              {identifierMode === 'qr' && <div>
+                <label className="block text-sm font-medium text-slate-600 mb-1.5">Upload seller’s UPI QR code <span className="text-red-500">*</span></label>
+                <input ref={qrInputRef} type="file" accept="image/*" onChange={(e) => void handleQrChange(e)} className="hidden" />
+                <button type="button" onClick={() => qrInputRef.current?.click()} disabled={decodingQr} className="w-full border-2 border-dashed border-indigo-200 rounded-xl p-4 text-left hover:border-indigo-400 hover:bg-indigo-50/50 transition-all disabled:opacity-60">
+                  <span className="flex items-center gap-3"><UploadCloud className="w-6 h-6 text-indigo-500" /><span><span className="block text-sm text-slate-700 font-medium">{decodingQr ? 'Reading QR code…' : identifier || 'Choose the QR image you paid'} </span><span className="block text-xs text-slate-500 mt-0.5">We’ll extract the UPI ID and save it with this fraud report.</span></span></span>
+                </button>
+              </div>}
+
               {/* Screenshot upload */}
               <div>
                 <label className="block text-sm font-medium text-slate-600 mb-1.5">
-                  Attach Screenshots
+                  Attach Screenshots (optional)
                 </label>
                 <div
                   onClick={() => fileInputRef.current?.click()}

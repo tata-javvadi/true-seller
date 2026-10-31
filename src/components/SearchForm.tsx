@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Search, ImageUp, Camera } from 'lucide-react';
+import { Search, ImageUp, Camera, Shield } from 'lucide-react';
 import { supabase, validateIdentifier, detectType, type FraudReport, type PublicTrustedSeller } from '@/lib/supabase';
 import { decodeQrImage, extractUpiId } from '@/lib/upiQr';
 import { ResultCard } from './ResultCard';
@@ -31,6 +31,7 @@ export function SearchForm() {
   const [decodingQr, setDecodingQr] = useState(false);
   const qrInputRef = useRef<HTMLInputElement>(null);
   const qrCameraInputRef = useRef<HTMLInputElement>(null);
+  const resultRef = useRef<HTMLDivElement>(null);
 
   const runSearch = useCallback(async (value: string, identifierMode: 'phone' | 'upi', source: 'phone' | 'upi' | 'qr' = identifierMode) => {
     const checked = validateIdentifier(value, identifierMode);
@@ -99,6 +100,12 @@ export function SearchForm() {
     autoSearchStarted.current = true;
     void runSearch(initialLookup.current.value, initialLookup.current.type);
   }, [runSearch]);
+
+  useEffect(() => {
+    if (!initialLookup.current || !['searching', 'found', 'genuine', 'safe', 'error'].includes(state)) return;
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    resultRef.current?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' });
+  }, [state]);
 
   const handleSearch = useCallback(() => runSearch(query, mode === 'phone' ? 'phone' : 'upi'), [query, mode, runSearch]);
 
@@ -213,10 +220,16 @@ export function SearchForm() {
         </button>}
       </form>
 
-      <div className="tsc-result">
+      <div ref={resultRef} className="tsc-result">
+        {initialLookup.current && state === 'searching' && <SharedLinkChecking identifier={searchedIdentifier} />}
         {state === 'found' && <div className="w-full min-w-0 space-y-3">{results.map((report) => <ResultCard key={report.id} report={report} />)}</div>}
 
-        {state === 'genuine' && trustedSeller && <GenuineSellerCard seller={trustedSeller} />}
+        {state === 'genuine' && trustedSeller && <GenuineSellerCard seller={trustedSeller} onCheckAnother={() => {
+          setState('idle');
+          setTrustedSeller(null);
+          setQuery('');
+          window.setTimeout(() => document.getElementById('seller-query')?.focus(), 0);
+        }} />}
 
         {state === 'safe' && (
           <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 text-center animate-[fadeIn_0.4s_ease]">
@@ -246,4 +259,20 @@ export function SearchForm() {
       </div>
     </div>
   );
+}
+
+function SharedLinkChecking({ identifier }: { identifier: string }) {
+  return <section className="relative overflow-hidden rounded-2xl border border-indigo-200 bg-white px-5 py-8 text-center shadow-lg shadow-indigo-100/70 animate-[fadeIn_0.4s_ease]" aria-live="polite">
+    <div className="absolute inset-x-0 top-0 h-1.5 overflow-hidden bg-indigo-50"><span className="block h-full w-2/5 rounded-full bg-gradient-to-r from-indigo-500 via-violet-500 to-emerald-400 motion-safe:animate-[verification-progress_1.8s_ease-in-out_infinite]" /></div>
+    <div className="relative mx-auto grid h-20 w-20 place-items-center rounded-full bg-gradient-to-br from-indigo-50 to-emerald-50 text-indigo-700">
+      <span className="absolute inset-0 rounded-full border-2 border-indigo-200 motion-safe:animate-ping opacity-40" />
+      <span className="absolute inset-2 rounded-full border border-dashed border-indigo-300 motion-safe:animate-[spin_8s_linear_infinite]" />
+      <Shield className="relative h-9 w-9 motion-safe:animate-pulse" />
+    </div>
+    <p className="mt-5 text-[10px] font-extrabold uppercase tracking-[0.2em] text-indigo-600">True Seller Check</p>
+    <h2 className="mt-1 text-xl font-extrabold text-slate-900">Checking this seller</h2>
+    <p className="mx-auto mt-2 max-w-sm break-all font-mono text-sm font-semibold text-slate-600">{identifier}</p>
+    <p className="mt-2 text-xs text-slate-500">Looking for verified seller status and community reports…</p>
+    <div className="mx-auto mt-5 flex max-w-40 items-center justify-center gap-1.5" aria-hidden="true">{[0, 1, 2].map((dot) => <span key={dot} className="h-1.5 w-1.5 rounded-full bg-indigo-500 motion-safe:animate-bounce" style={{ animationDelay: `${dot * 120}ms` }} />)}</div>
+  </section>;
 }

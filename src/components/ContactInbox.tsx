@@ -52,7 +52,7 @@ export function ContactInbox() {
             return <article key={item.id} className="rounded-xl border border-slate-200 p-3.5 sm:p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0"><h3 className="font-semibold text-slate-900">{item.name}</h3><p className="mt-0.5 text-sm text-slate-600">{item.phone_number}</p></div>
-                <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#128C7E] px-3.5 text-sm font-semibold text-white hover:bg-[#0e7468]"><MessageCircle className="h-4 w-4" /> WhatsApp</a>
+                <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[#128C7E] px-3.5 text-sm font-semibold text-white hover:bg-[#0e7468]"><MessageCircle className="h-4 w-4" /> WhatsApp</a>
               </div>
               <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700">{item.message}</p>
               <time className="mt-3 block text-xs text-slate-500" dateTime={item.created_at}>{dateFormat.format(new Date(item.created_at))}</time>

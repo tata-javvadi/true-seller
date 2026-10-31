@@ -105,6 +105,48 @@
 .contact-field { display: block; width: 100%; min-height: 46px; box-sizing: border-box; border: 1.5px solid #8796d1; border-radius: 11px; background: #fff; padding: 10px 12px; color: #101a3b; font-size: 16px; line-height: 1.45; }
 .contact-field:focus { outline: none; border-color: #304bd5; box-shadow: 0 0 0 3px rgba(59,91,255,.13); }
 
+@keyframes verification-progress {
+  0% { transform: translateX(-110%); }
+  65%, 100% { transform: translateX(270%); }
+}
+@keyframes genuine-card-enter {
+  0% { opacity: 0; transform: translateY(24px) scale(.97); filter: blur(5px); }
+  70% { opacity: 1; filter: blur(0); }
+  100% { transform: translateY(0) scale(1); }
+}
+@keyframes genuine-seal-enter {
+  0% { opacity: 0; transform: scale(.45) rotate(-24deg); }
+  70% { opacity: 1; transform: scale(1.12) rotate(5deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+@keyframes genuine-glow {
+  0%, 100% { opacity: .45; transform: scale(.9); }
+  50% { opacity: .9; transform: scale(1.15); }
+}
+@keyframes genuine-confetti-fall {
+  0% { opacity: 0; transform: translateY(-8px) rotate(0) scale(.5); }
+  18% { opacity: .95; }
+  100% { opacity: 0; transform: translateY(78px) rotate(220deg) scale(1); }
+}
+.genuine-card-enter { animation: genuine-card-enter .72s cubic-bezier(.2,.8,.2,1) both; }
+.genuine-seal { animation: genuine-seal-enter .75s .12s cubic-bezier(.2,.8,.2,1) both; }
+.genuine-card-glow { animation: genuine-glow 3.5s ease-in-out infinite; }
+.genuine-confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.genuine-confetti i { position: absolute; top: 22%; left: 42%; width: 6px; height: 9px; border-radius: 2px; background: #d9f99d; animation: genuine-confetti-fall 1s ease-out both; }
+.genuine-confetti i:nth-child(1) { left: 40%; background: #bef264; }
+.genuine-confetti i:nth-child(2) { left: 48%; background: #a7f3d0; }
+.genuine-confetti i:nth-child(3) { left: 56%; background: #fde68a; }
+.genuine-confetti i:nth-child(4) { left: 64%; background: #fff; }
+.genuine-confetti i:nth-child(5) { left: 72%; background: #bef264; }
+.genuine-confetti i:nth-child(6) { left: 78%; background: #a7f3d0; }
+.genuine-confetti i:nth-child(7) { left: 34%; background: #fde68a; }
+.genuine-confetti i:nth-child(8) { left: 84%; background: #fff; }
+.genuine-confetti i:nth-child(9) { left: 60%; background: #bef264; }
+
+@media (prefers-reduced-motion: reduce) {
+  .genuine-card-enter, .genuine-seal, .genuine-card-glow, .genuine-confetti i { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}
+
 @media (max-width: 360px) {
   .tsc-hero { margin-inline: 12px; padding-inline: 19px; }
   .tsc-card { margin-inline: 14px; padding: 14px; }

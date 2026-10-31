@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import {
-  AlertCircle, ArrowDownWideNarrow, Check, ChevronLeft, ChevronRight, Clock,
+  AlertCircle, ArrowDownWideNarrow, BadgeCheck, Check, ChevronLeft, ChevronRight, Clock,
   CreditCard, FileCheck2, FileClock, Filter, LayoutDashboard, LogOut, Phone,
   RefreshCw, Search, Shield, X,
 } from 'lucide-react';
@@ -15,10 +15,11 @@ import {
 import { AdminAuth, ADMIN_SESSION_KEY } from './AdminAuth';
 import { AdminAnalytics } from './AdminAnalytics';
 import { ContactInbox } from './ContactInbox';
+import { TrustedSellerManager } from './TrustedSellerManager';
 
 const ADMIN_REVIEWER = 'admin';
 const REPORTS_PER_PAGE = 8;
-type DashboardSection = 'overview' | 'reports' | 'messages';
+type DashboardSection = 'overview' | 'reports' | 'trusted' | 'messages';
 type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected';
 
 export function AdminPanel() {
@@ -108,6 +109,7 @@ function AdminDashboard({ onLock }: { onLock: () => void }) {
   const navItems: { id: DashboardSection; label: string; icon: typeof LayoutDashboard; count?: number }[] = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'reports', label: 'Fraud reports', icon: FileCheck2, count: counts.pending },
+    { id: 'trusted', label: 'Genuine sellers', icon: BadgeCheck },
     { id: 'messages', label: 'Contact inbox', icon: Clock },
   ];
 
@@ -163,6 +165,7 @@ function AdminDashboard({ onLock }: { onLock: () => void }) {
       </section>}
 
       {section === 'messages' && <div><div className="mb-4"><p className="text-xs font-bold uppercase tracking-wider text-emerald-700">Support</p><h2 className="mt-1 text-2xl font-bold text-slate-950">Contact inbox</h2><p className="mt-1 text-sm text-slate-500">Read user messages and follow up directly.</p></div><ContactInbox /></div>}
+      {section === 'trusted' && <TrustedSellerManager />}
     </div>
   );
 }

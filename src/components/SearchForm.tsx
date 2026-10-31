@@ -1,18 +1,31 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Search, ImageUp, Camera } from 'lucide-react';
-import { supabase, validateIdentifier, detectType, type FraudReport } from '@/lib/supabase';
+import { supabase, validateIdentifier, detectType, type FraudReport, type PublicTrustedSeller } from '@/lib/supabase';
 import { decodeQrImage, extractUpiId } from '@/lib/upiQr';
 import { ResultCard } from './ResultCard';
+import { GenuineSellerCard } from './GenuineSellerCard';
 
-type SearchState = 'idle' | 'searching' | 'found' | 'safe' | 'error';
+type SearchState = 'idle' | 'searching' | 'found' | 'genuine' | 'safe' | 'error';
 type SearchMode = 'phone' | 'upi' | 'qr';
 
+function getIdentifierFromPath(): { value: string; type: 'phone' | 'upi' } | null {
+  const path = window.location.pathname.replace(/^\/+|\/+$/g, '');
+  if (!path || path.includes('/') || path === 'admin') return null;
+  let candidate: string;
+  try { candidate = decodeURIComponent(path); } catch { return null; }
+  const checked = validateIdentifier(candidate);
+  return checked.ok ? { value: checked.value, type: checked.type } : null;
+}
+
 export function SearchForm() {
-  const [mode, setMode] = useState<SearchMode>('phone');
-  const [query, setQuery] = useState('');
+  const initialLookup = useRef(getIdentifierFromPath());
+  const autoSearchStarted = useRef(false);
+  const [mode, setMode] = useState<SearchMode>(initialLookup.current?.type ?? 'phone');
+  const [query, setQuery] = useState(initialLookup.current?.value ?? '');
   const [validationError, setValidationError] = useState('');
   const [state, setState] = useState<SearchState>('idle');
   const [results, setResults] = useState<FraudReport[]>([]);
+  const [trustedSeller, setTrustedSeller] = useState<PublicTrustedSeller | null>(null);
   const [searchedIdentifier, setSearchedIdentifier] = useState('');
   const [qrError, setQrError] = useState('');
   const [decodingQr, setDecodingQr] = useState(false);
@@ -25,12 +38,14 @@ export function SearchForm() {
       setValidationError(checked.error);
       setState('idle');
       setResults([]);
+      setTrustedSeller(null);
       return;
     }
 
     setValidationError('');
     setState('searching');
     setResults([]);
+    setTrustedSeller(null);
     setSearchedIdentifier(checked.value);
 
     try {
@@ -46,6 +61,16 @@ export function SearchForm() {
         return;
       }
 
+      let genuineSeller: PublicTrustedSeller | null = null;
+      if (!data?.length) {
+        const { data: trustedData, error: trustedError } = await supabase.rpc('lookup_trusted_seller', { p_identifier: checked.value });
+        if (trustedError) {
+          setState('error');
+          return;
+        }
+        genuineSeller = (trustedData?.[0] as PublicTrustedSeller | undefined) ?? null;
+      }
+
       const { error: logError } = await supabase.from('search_logs').insert({
         identifier: checked.value,
         identifier_type: detectType(checked.value),
@@ -58,6 +83,9 @@ export function SearchForm() {
       if (data?.length) {
         setResults(data as FraudReport[]);
         setState('found');
+      } else if (genuineSeller) {
+        setTrustedSeller(genuineSeller);
+        setState('genuine');
       } else {
         setState('safe');
       }
@@ -65,6 +93,12 @@ export function SearchForm() {
       setState('error');
     }
   }, []);
+
+  useEffect(() => {
+    if (!initialLookup.current || autoSearchStarted.current) return;
+    autoSearchStarted.current = true;
+    void runSearch(initialLookup.current.value, initialLookup.current.type);
+  }, [runSearch]);
 
   const handleSearch = useCallback(() => runSearch(query, mode === 'phone' ? 'phone' : 'upi'), [query, mode, runSearch]);
 
@@ -79,6 +113,7 @@ export function SearchForm() {
     setQrError('');
     setState('idle');
     setResults([]);
+    setTrustedSeller(null);
   };
 
   const handleQrFile = async (file?: File) => {
@@ -180,6 +215,8 @@ export function SearchForm() {
 
       <div className="tsc-result">
         {state === 'found' && <div className="w-full min-w-0 space-y-3">{results.map((report) => <ResultCard key={report.id} report={report} />)}</div>}
+
+        {state === 'genuine' && trustedSeller && <GenuineSellerCard seller={trustedSeller} />}
 
         {state === 'safe' && (
           <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 text-center animate-[fadeIn_0.4s_ease]">

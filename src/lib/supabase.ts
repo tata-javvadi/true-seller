@@ -24,6 +24,21 @@ export interface FraudReport {
   updated_at: string;
 }
 
+export interface TrustedSeller {
+  id: string;
+  identifier: string;
+  identifier_type: 'phone' | 'upi';
+  display_name: string | null;
+  verification_note: string | null;
+  active: boolean;
+  verified_by: string | null;
+  verified_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type PublicTrustedSeller = Pick<TrustedSeller, 'identifier' | 'identifier_type' | 'display_name' | 'verification_note' | 'verified_at'>;
+
 export type ReportStatus = 'pending' | 'approved' | 'rejected';
 
 export const STATUS_LABELS: Record<ReportStatus, string> = {
